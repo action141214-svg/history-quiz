@@ -1,0 +1,355 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2b2d42 0%, #1a1a2e 100%);
+  padding: 20px;
+}
+
+.container {
+  width: 100%;
+  max-width: 600px;
+  background: #16213e;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  color: #eaeaea;
+}
+
+.screen {
+  display: none;
+  text-align: center;
+}
+
+.screen.active {
+  display: block;
+}
+
+h1 {
+  margin-bottom: 12px;
+  color: #f4a300;
+  line-height: 1.4;
+}
+
+h2 {
+  margin: 20px 0;
+  text-align: left;
+  font-size: 1.3rem;
+  color: #ffffff;
+}
+
+p {
+  color: #b8b8b8;
+  margin-bottom: 20px;
+}
+
+.btn {
+  background: #f4a300;
+  color: #1a1a2e;
+  border: none;
+  padding: 14px 32px;
+  font-size: 1rem;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+  margin-top: 10px;
+}
+
+.btn:hover {
+  background: #ffb830;
+  transform: translateY(-2px);
+}
+
+.btn.hidden {
+  display: none;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: #b8b8b8;
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #0f172a;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+#progress-fill {
+  height: 100%;
+  width: 10%;
+  background: #f4a300;
+  transition: width 0.3s ease;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.choice-btn {
+  background: #0f172a;
+  color: #eaeaea;
+  border: 2px solid #2b2d42;
+  padding: 14px 18px;
+  text-align: left;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.choice-btn:hover {
+  border-color: #f4a300;
+}
+
+.choice-btn.correct {
+  background: #1e5631;
+  border-color: #2ecc71;
+}
+
+.choice-btn.wrong {
+  background: #5a1e1e;
+  border-color: #e74c3c;
+}
+
+.choice-btn:disabled {
+  cursor: not-allowed;
+}
+
+#feedback {
+  margin-top: 16px;
+  font-weight: bold;
+  min-height: 24px;
+}
+
+.final-score {
+  font-size: 2rem;
+  color: #f4a300;
+  font-weight: bold;
+}
+
+/* ===== ปุ่มเสริม ===== */
+.btn-outline {
+  background: transparent;
+  border: 2px solid #f4a300;
+  color: #f4a300;
+}
+.btn-outline:hover {
+  background: rgba(244, 163, 0, 0.1);
+}
+.btn-text {
+  background: none;
+  color: #b8b8b8;
+  padding: 8px;
+  font-weight: normal;
+}
+.btn-text:hover {
+  background: none;
+  color: #eaeaea;
+  transform: none;
+}
+
+/* ===== input ช่องกรอกข้อมูล ===== */
+.text-input {
+  width: 100%;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 2px solid #2b2d42;
+  background: #0f172a;
+  color: #eaeaea;
+  font-size: 1rem;
+  text-align: center;
+}
+.text-input:focus {
+  outline: none;
+  border-color: #f4a300;
+}
+.error-text {
+  color: #e74c3c;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+/* ===== รหัสห้อง ===== */
+.room-code {
+  font-size: 2.8rem;
+  font-weight: bold;
+  letter-spacing: 8px;
+  color: #f4a300;
+  background: #0f172a;
+  padding: 16px;
+  border-radius: 12px;
+  margin: 16px 0;
+}
+
+/* ===== รายชื่อผู้เล่น ===== */
+.player-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.player-list li {
+  background: #0f172a;
+  border: 1px solid #2b2d42;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+.waiting-text {
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* ===== กระดานคะแนน ===== */
+.score-list {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 20px;
+}
+.score-list li {
+  display: flex;
+  justify-content: space-between;
+  background: #0f172a;
+  border: 1px solid #2b2d42;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.score-list li:first-child {
+  border-color: #f4a300;
+}
+
+.correct-answer-text {
+  color: #2ecc71;
+  font-weight: bold;
+}
+
+#mp-timer {
+  color: #f4a300;
+  font-weight: bold;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ===== สปินเนอร์รอผลลัพธ์ (ฝั่งผู้เล่นหลังตอบ) ===== */
+.waiting-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 0;
+}
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 5px solid #2b2d42;
+  border-top-color: #f4a300;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.waiting-spinner p {
+  margin: 0;
+  color: #b8b8b8;
+}
+
+/* ===== ผลลัพธ์ส่วนตัวหลังตอบ ===== */
+.personal-result {
+  font-size: 1.2rem;
+  font-weight: bold;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.personal-result.correct {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+}
+.personal-result.wrong {
+  background: rgba(231, 76, 60, 0.15);
+  color: #e74c3c;
+}
+
+/* ===== กราฟแท่งแสดงจำนวนคนตอบแต่ละตัวเลือก ===== */
+.answer-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 20px 0;
+  text-align: left;
+}
+.chart-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 50px;
+  align-items: center;
+  gap: 10px;
+}
+.chart-label {
+  font-size: 0.85rem;
+  color: #eaeaea;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-bar-track {
+  height: 20px;
+  background: #0f172a;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.chart-bar-fill {
+  height: 100%;
+  background: #556;
+  transition: width 0.4s ease;
+}
+.chart-bar-fill.correct {
+  background: #2ecc71;
+}
+.chart-count {
+  font-size: 0.8rem;
+  color: #b8b8b8;
+  text-align: right;
+}
+
+/* ===== เอฟเฟกต์ตัวเลขนับขึ้น สไตล์ LP counter (Yu-Gi-Oh) ===== */
+.lp-counter {
+  font-variant-numeric: tabular-nums;
+  transition: color 0.1s;
+}
+.lp-counter.lp-counting {
+  color: #f4a300;
+  text-shadow: 0 0 8px rgba(244, 163, 0, 0.6);
+}
+.lp-counter.lp-done {
+  animation: lp-flash 0.4s ease;
+}
+@keyframes lp-flash {
+  0% { transform: scale(1.25); color: #fff; }
+  100% { transform: scale(1); color: inherit; }
+}

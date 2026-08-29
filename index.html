@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เกมตอบคำถาม: สงครามโลกครั้งที่สอง</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+  <div id="start-screen" class="screen active">
+    <h1>🪖 เกมตอบคำถาม<br>สงครามโลกครั้งที่สอง</h1>
+    <p>ทดสอบความรู้ของคุณด้วยคำถาม 4 ตัวเลือก</p>
+    <button id="start-btn" class="btn">เล่นคนเดียว</button>
+    <button id="go-multiplayer-btn" class="btn btn-outline">เล่นแบบห้อง (เรียลไทม์)</button>
+  </div>
+
+  <!-- ===== หน้าเลือกสร้าง/เข้าร่วมห้อง ===== -->
+  <div id="mp-home-screen" class="screen">
+    <h1>🌐 เล่นแบบห้อง</h1>
+    <p>สร้างห้องใหม่เพื่อเป็นผู้คุมเกม หรือใส่รหัสห้องเพื่อเข้าร่วม</p>
+    <button id="go-create-room-btn" class="btn">สร้างห้อง (ผู้คุมเกม)</button>
+    <button id="go-join-room-btn" class="btn btn-outline">เข้าร่วมห้อง (ผู้เล่น)</button>
+    <button class="btn btn-text back-to-start-btn">← กลับ</button>
+  </div>
+
+  <div id="mp-create-screen" class="screen">
+    <h1>สร้างห้อง</h1>
+    <p>ระบบจะสุ่มรหัสห้อง 6 หลักให้อัตโนมัติ</p>
+    <button id="confirm-create-room-btn" class="btn">สร้างห้องเลย</button>
+    <button class="btn btn-text back-to-mp-home-btn">← กลับ</button>
+  </div>
+
+  <div id="mp-join-screen" class="screen">
+    <h1>เข้าร่วมห้อง</h1>
+    <input id="join-room-code-input" class="text-input" type="text" maxlength="6" placeholder="รหัสห้อง 6 หลัก" inputmode="numeric">
+    <input id="join-room-name-input" class="text-input" type="text" maxlength="20" placeholder="ชื่อของคุณ">
+    <p id="join-error" class="error-text"></p>
+    <button id="confirm-join-room-btn" class="btn">เข้าร่วมห้อง</button>
+    <button class="btn btn-text back-to-mp-home-btn">← กลับ</button>
+  </div>
+
+  <!-- ===== ห้องรอ (Lobby) ===== -->
+  <div id="mp-lobby-screen" class="screen">
+    <h1>ห้องรอเริ่มเกม</h1>
+    <p>รหัสห้อง</p>
+    <div id="mp-room-code-display" class="room-code"></div>
+    <p>ผู้เล่นในห้อง (<span id="mp-player-count">0</span>)</p>
+    <ul id="mp-player-list" class="player-list"></ul>
+    <div id="mp-host-controls" class="hidden">
+      <button id="mp-host-start-btn" class="btn">เริ่มเกม</button>
+    </div>
+    <p id="mp-waiting-text" class="waiting-text">รอผู้คุมเกมกดเริ่ม...</p>
+  </div>
+
+  <!-- ===== หน้าคำถาม (multiplayer) ===== -->
+  <div id="mp-question-screen" class="screen">
+    <div class="top-bar">
+      <span id="mp-question-count">ข้อ 1/20</span>
+      <span id="mp-timer">15 วินาที</span>
+    </div>
+    <h2 id="mp-question-text">คำถาม</h2>
+    <div id="mp-choices" class="choices"></div>
+    <div id="mp-waiting-spinner" class="waiting-spinner hidden">
+      <div class="spinner"></div>
+      <p>ส่งคำตอบแล้ว! กำลังรอผู้เล่นคนอื่น...</p>
+    </div>
+    <button id="mp-host-skip-btn" class="btn btn-outline hidden">⏭️ ข้ามข้อนี้ (ดูเฉลยเลย)</button>
+  </div>
+
+  <!-- ===== หน้าเฉลย + กราฟคำตอบ ===== -->
+  <div id="mp-reveal-screen" class="screen">
+    <h1>เฉลยคำตอบ</h1>
+    <p id="mp-reveal-correct-text" class="correct-answer-text"></p>
+    <p id="mp-personal-result" class="personal-result hidden"></p>
+    <div id="mp-answer-chart" class="answer-chart"></div>
+    <button id="mp-host-leaderboard-btn" class="btn hidden">ดูอันดับผู้เล่น</button>
+    <p class="waiting-text">รอผู้คุมเกมไปดูอันดับ...</p>
+  </div>
+
+  <!-- ===== หน้ากระดานอันดับ ===== -->
+  <div id="mp-leaderboard-screen" class="screen">
+    <h1>🏆 อันดับผู้เล่น</h1>
+    <ul id="mp-leaderboard-list" class="score-list"></ul>
+    <button id="mp-host-next-question-btn" class="btn hidden">ข้อถัดไป</button>
+    <p class="waiting-text">รอผู้คุมเกมไปข้อถัดไป...</p>
+  </div>
+
+  <!-- ===== สรุปผลสุดท้าย ===== -->
+  <div id="mp-final-screen" class="screen">
+    <h1>🏆 สรุปผลสุดท้าย</h1>
+    <ul id="mp-final-list" class="score-list"></ul>
+    <button class="btn back-to-start-btn">กลับหน้าแรก</button>
+  </div>
+
+  <div id="quiz-screen" class="screen">
+    <div class="top-bar">
+      <span id="question-count">คำถามที่ 1/10</span>
+      <span id="score">คะแนน: 0</span>
+    </div>
+    <div class="progress-bar">
+      <div id="progress-fill"></div>
+    </div>
+    <h2 id="question-text">คำถาม</h2>
+    <div id="choices" class="choices"></div>
+    <p id="feedback"></p>
+    <button id="next-btn" class="btn hidden">ข้อถัดไป</button>
+  </div>
+
+  <div id="end-screen" class="screen">
+    <h1>จบเกม!</h1>
+    <p id="final-score" class="final-score"></p>
+    <p id="final-message"></p>
+    <button id="restart-btn" class="btn">เล่นอีกครั้ง</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="questions.js"></script>
+<script src="script.js"></script>
+<script src="multiplayer.js"></script>
+<script>
+  // ปุ่มนำทางเล็กๆ ที่ใช้ร่วมกันหลายหน้า
+  document.getElementById("go-multiplayer-btn")?.addEventListener("click", () => showScreen("mp-home-screen"));
+  document.querySelectorAll(".back-to-start-btn").forEach(b => b.addEventListener("click", () => showScreen("start-screen")));
+  document.querySelectorAll(".back-to-mp-home-btn").forEach(b => b.addEventListener("click", () => showScreen("mp-home-screen")));
+</script>
+</body>
+</html>
