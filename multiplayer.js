@@ -214,9 +214,17 @@ function resetToHome() {
 async function kickPlayer(playerId, playerName) {
   if (!isHost) return;
   if (!confirm(`ต้องการเตะ "${playerName}" ออกจากห้องใช่หรือไม่?`)) return;
+
+  // ---- ลบออกจากรายชื่อฝั่ง host ทันที ไม่ต้องรอ Realtime ตอบกลับ ----
+  const row = document.querySelector(`#mp-player-list li[data-player-id="${playerId}"]`);
+  if (row) row.remove();
+  const countEl = document.getElementById("mp-player-count");
+  if (countEl) countEl.textContent = Math.max(0, parseInt(countEl.textContent, 10) - 1);
+
   const { error } = await supabaseClient.from("players").delete().eq("id", playerId);
   if (error) {
     alert("เตะผู้เล่นไม่สำเร็จ: " + error.message);
+    await refreshRoomState(); // ลบไม่สำเร็จ ต้องดึงรายชื่อจริงกลับมาแสดงใหม่
   }
 }
 
@@ -288,6 +296,7 @@ function renderPlayerList(players) {
   document.getElementById("mp-player-count").textContent = players.length;
   players.forEach((p) => {
     const li = document.createElement("li");
+    li.dataset.playerId = p.id;
 
     const img = document.createElement("img");
     img.className = "avatar-circle";
