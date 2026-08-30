@@ -52,6 +52,9 @@ const AVATAR_OPTIONS = [
   { id: "avatar13", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile13.jpg" },
   { id: "avatar14", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile14.jpg" },
   { id: "avatar15", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/proflie16.jpg"},
+  { id: "avatar16", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/proflie17.jpg"},
+  { id: "avatar17", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/proflie18.jpg"},
+  { id: "avatar18", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/proflie19.jpg"},
 ];
 
 // รูปโปรไฟล์เริ่มต้น (ยังไม่ได้เลือก) เป็นไอคอนคนเงาแบบ inline SVG ไม่ต้องพึ่งไฟล์ภายนอก
