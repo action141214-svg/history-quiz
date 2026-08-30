@@ -264,6 +264,7 @@ p {
 }
 .avatar-picker {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   justify-content: center;
   margin: 6px 0 16px;

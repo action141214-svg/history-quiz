@@ -31,7 +31,10 @@ let myAvatar = null; // avatar URL ปัจจุบันของฉัน (n
 // ⚠️ แทนที่ URL ด้านล่างด้วย public URL จริงหลังอัปโหลดรูป profile1.jpg / profile2.jpg ขึ้น Storage แล้ว
 const AVATAR_OPTIONS = [
   { id: "avatar1", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile1.jpg" },
-  { id: "avatar2", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile2.jpg" }
+  { id: "avatar2", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile2.jpg" },
+  { id: "avatar3", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile3.jpg" },
+  { id: "avatar4", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile4.jpg" },
+  { id: "avatar5", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile5.jpg" }
 ];
 
 // รูปโปรไฟล์เริ่มต้น (ยังไม่ได้เลือก) เป็นไอคอนคนเงาแบบ inline SVG ไม่ต้องพึ่งไฟล์ภายนอก
