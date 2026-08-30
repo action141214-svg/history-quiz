@@ -8,6 +8,8 @@
 </head>
 <body>
 
+<div id="steal-flash-overlay"></div>
+
 <div class="container">
   <div id="start-screen" class="screen active">
     <h1>🪖 เกมตอบคำถาม<br>สงครามโลกครั้งที่สอง</h1>
@@ -60,8 +62,14 @@
       <span id="mp-question-count">ข้อ 1/20</span>
       <span id="mp-timer">15 วินาที</span>
     </div>
+    <p id="mp-active-card-badge" class="active-card-badge hidden"></p>
     <h2 id="mp-question-text">คำถาม</h2>
     <div id="mp-choices" class="choices"></div>
+    <button id="mp-confirm-double-btn" class="btn hidden" disabled>ยืนยัน 2 คำตอบ</button>
+    <div id="mp-frozen-overlay" class="frozen-overlay hidden">
+      <div class="spinner"></div>
+      <p>❄️ คุณถูกแช่แข็งชั่วคราว...</p>
+    </div>
     <div id="mp-waiting-spinner" class="waiting-spinner hidden">
       <div class="spinner"></div>
       <p>ส่งคำตอบแล้ว! กำลังรอผู้เล่นคนอื่น...</p>
@@ -85,6 +93,23 @@
     <ul id="mp-leaderboard-list" class="score-list"></ul>
     <button id="mp-host-next-question-btn" class="btn hidden">ข้อถัดไป</button>
     <p class="waiting-text">รอผู้คุมเกมไปข้อถัดไป...</p>
+  </div>
+
+  <!-- ===== หน้าเลือกการ์ดพลัง ===== -->
+  <div id="mp-card-pick-screen" class="screen">
+    <h1>🃏 เลือกการ์ดพลัง</h1>
+    <p>เลือกได้ 1 ใบ มีผลกับคำถามข้อถัดไปเท่านั้น</p>
+    <div id="mp-card-choices" class="card-choices"></div>
+    <p id="mp-card-picked-text" class="waiting-text hidden">คุณเลือกการ์ดแล้ว รอผู้เล่นคนอื่น...</p>
+
+    <div id="mp-card-host-panel" class="hidden">
+      <p id="mp-card-progress-text"></p>
+      <div id="mp-card-events-log" class="card-events-log"></div>
+      <div id="mp-card-all-picked-banner" class="card-all-picked-banner hidden">
+        🔴 ผู้เล่นเลือกการ์ดครบทุกคนแล้ว!
+      </div>
+      <button id="mp-host-next-after-cards-btn" class="btn hidden">เริ่มคำถามถัดไป</button>
+    </div>
   </div>
 
   <!-- ===== สรุปผลสุดท้าย ===== -->

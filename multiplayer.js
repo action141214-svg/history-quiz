@@ -1,6 +1,6 @@
 // ============================================================
-// ระบบเกมตอบคำถามแบบเรียลไทม์ สไตล์ Kahoot
-// states: waiting -> question -> reveal -> leaderboard -> (next question) / ended
+// ระบบเกมตอบคำถามแบบเรียลไทม์ สไตล์ Kahoot + ระบบการ์ดพลัง
+// states: waiting -> question -> reveal -> leaderboard -> card_pick -> (next question) / ended
 // ============================================================
 
 const QUESTION_TIME_LIMIT_MS = 15000;
@@ -18,6 +18,23 @@ let roomChannel = null;
 let autoRevealChecked = false;
 let mpQuestions = []; // โหลดจาก Supabase (quiz_questions_public) แทนไฟล์ questions.js เดิม เพื่อไม่ให้เฉลยหลุดไปกับ client
 let lastAnswerResult = null; // เก็บผลลัพธ์ล่าสุดจาก Edge Function (ถูก/ผิด/คะแนน) ไว้โชว์ตอนเฉลย
+
+// ---------- สถานะเกี่ยวกับการ์ด ----------
+let myCardThisRound = null;   // card_id ที่เราถืออยู่สำหรับคำถามข้อปัจจุบัน
+let speedUpActive = false;    // การ์ด #7 ทำให้ตัวจับเวลาของเราเดินไวขึ้น (คนอื่นถือ ไม่ใช่เรา)
+let doubleChoiceSelection = []; // สำหรับการ์ด #3 (เลือก 2 คำตอบ)
+
+const CARD_CATALOG = [
+  { id: 1, name: "โบนัส +25%", desc: "ถ้าข้อถัดไปตอบถูก ได้คะแนนเพิ่ม 25%" },
+  { id: 2, name: "เดิมพันเสี่ยง -10%", desc: "ถ้าข้อถัดไปตอบผิด เสียคะแนน 10% ของคะแนนปัจจุบัน" },
+  { id: 3, name: "เลือก 2 คำตอบ", desc: "เลือกได้ 2 ตัวเลือก ถูกข้อใดข้อหนึ่งได้ x2 ผิดทั้งคู่เหลือ 25%" },
+  { id: 4, name: "ขโมยคะแนน", desc: "ขโมยคะแนน 25% จากผู้เล่นสุ่ม 1 คน ทันทีที่เลือก" },
+  { id: 5, name: "ตัดตัวเลือกผิด", desc: "ข้อถัดไปจะตัดตัวเลือกที่ผิดออกให้ 1 ข้อ" },
+  { id: 6, name: "แช่แข็งคู่แข่ง", desc: "ผู้เล่นอื่นทั้งหมดถูกแช่แข็ง 5 วินาทีแรกของข้อถัดไป" },
+  { id: 7, name: "เร่งเวลาคู่แข่ง", desc: "เวลาของข้อถัดไปจะเดินไวขึ้นสำหรับผู้เล่นอื่น" },
+  { id: 8, name: "รู้ตัวเลือกผิด", desc: "ข้อถัดไปจะเห็นว่าตัวเลือกไหนผิด 1 ข้อ (ยังกดได้)" },
+  { id: 9, name: "ดับเบิลออร์นัธติ้ง", desc: "ตอบถูกได้คะแนน x2 แต่ถ้าตอบผิดคะแนนเหลือ 0 ทันที" }
+];
 
 // ---------- โหลดคำถาม (ไม่มีเฉลยติดมาด้วย) จาก view ที่ปลอดภัย ----------
 async function loadQuestionsFromServer() {
@@ -130,6 +147,8 @@ function listenToRoom(code) {
     .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `code=eq.${code}` }, () => refreshRoomState())
     .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `room_code=eq.${code}` }, () => refreshRoomState())
     .on("postgres_changes", { event: "*", schema: "public", table: "answers", filter: `room_code=eq.${code}` }, () => onAnswersChanged())
+    .on("postgres_changes", { event: "*", schema: "public", table: "player_cards", filter: `room_code=eq.${code}` }, () => onCardsChanged())
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "card_events", filter: `room_code=eq.${code}` }, (payload) => onCardEvent(payload.new))
     .subscribe();
 
   refreshRoomState();
@@ -153,6 +172,25 @@ async function onAnswersChanged() {
   }
 }
 
+// ---------- เมื่อมีคนเลือกการ์ดเพิ่ม: แค่ re-render หน้าเลือกการ์ด (ราคาถูก) ----------
+async function onCardsChanged() {
+  await refreshRoomState();
+}
+
+// ---------- เมื่อมีเหตุการณ์ขโมยคะแนนเกิดขึ้น: แจ้งเตือนคนถูกขโมยด้วยจอแดง ----------
+function onCardEvent(ev) {
+  if (ev.to_player_id === myPlayerId) {
+    triggerStealFlash(ev.from_player_name, ev.amount);
+  }
+}
+
+function triggerStealFlash(fromName, amount) {
+  const overlay = document.getElementById("steal-flash-overlay");
+  overlay.textContent = `⚠️ ${fromName} ขโมยคะแนนคุณไป ${amount} คะแนน!`;
+  overlay.classList.add("show");
+  setTimeout(() => overlay.classList.remove("show"), 2500);
+}
+
 // ---------- ดึงข้อมูลห้องล่าสุดแล้ว render ----------
 async function refreshRoomState() {
   const { data: room } = await supabaseClient.from("rooms").select("*").eq("code", roomCode).maybeSingle();
@@ -164,11 +202,13 @@ async function refreshRoomState() {
   if (room.status === "waiting") {
     showScreen("mp-lobby-screen");
   } else if (room.status === "question") {
-    renderQuestionScreen(room);
+    await renderQuestionScreen(room);
   } else if (room.status === "reveal") {
     await renderRevealScreen(room, players || []);
   } else if (room.status === "leaderboard") {
     await renderLeaderboardScreen(room, players || []);
+  } else if (room.status === "card_pick") {
+    await renderCardPickScreen(room, players || []);
   } else if (room.status === "ended") {
     renderFinalScreen(players || []);
   }
@@ -215,6 +255,7 @@ async function hostSkipQuestion() {
   await revealAnswer();
 }
 
+// หลังดูสกอร์บอร์ดแล้ว host กด "ข้อถัดไป" -> ไปหน้าเลือกการ์ดก่อนเสมอ (ถ้ายังไม่ใช่ข้อสุดท้าย)
 async function hostAdvanceFromLeaderboard() {
   const { data: room } = await supabaseClient.from("rooms").select("*").eq("code", roomCode).maybeSingle();
   if (!room) return;
@@ -222,19 +263,137 @@ async function hostAdvanceFromLeaderboard() {
   if (nextIndex >= mpQuestions.length) {
     await supabaseClient.from("rooms").update({ status: "ended" }).eq("code", roomCode);
   } else {
-    await goToQuestion(nextIndex);
+    await supabaseClient.from("rooms").update({ status: "card_pick" }).eq("code", roomCode);
+  }
+}
+
+// หลังผู้เล่นเลือกการ์ดครบ (หรือ host ยอมข้าม) -> เริ่มคำถามข้อถัดไปจริงๆ
+async function hostStartNextQuestionAfterCards() {
+  const { data: room } = await supabaseClient.from("rooms").select("*").eq("code", roomCode).maybeSingle();
+  if (!room) return;
+  await goToQuestion(room.current_index + 1);
+}
+
+// ============================================================
+// หน้าเลือกการ์ดพลัง
+// ============================================================
+
+// สุ่มการ์ด 3 ใบจาก 9 ใบ แบบ deterministic (คนเดิม+รอบเดิม = ได้ชุดเดิมเสมอ กันรีเฟรชแล้วเปลี่ยน)
+function seededShuffleIndices(seedStr, n) {
+  let seed = 0;
+  for (let i = 0; i < seedStr.length; i++) seed = (seed * 31 + seedStr.charCodeAt(i)) | 0;
+  function rand() {
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  const arr = Array.from({ length: n }, (_, i) => i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function getOfferedCards(targetQuestionIndex) {
+  const seed = `${roomCode}-${myPlayerId}-${targetQuestionIndex}`;
+  const order = seededShuffleIndices(seed, CARD_CATALOG.length);
+  return order.slice(0, 3).map((i) => CARD_CATALOG[i]);
+}
+
+async function renderCardPickScreen(room, players) {
+  showScreen("mp-card-pick-screen");
+  const targetIndex = room.current_index + 1;
+
+  const choicesBox = document.getElementById("mp-card-choices");
+  const pickedText = document.getElementById("mp-card-picked-text");
+
+  if (!isHost) {
+    const { data: myPick } = await supabaseClient
+      .from("player_cards").select("card_id")
+      .eq("room_code", roomCode).eq("target_question_index", targetIndex)
+      .eq("player_id", myPlayerId).maybeSingle();
+
+    if (myPick) {
+      choicesBox.classList.add("hidden");
+      pickedText.classList.remove("hidden");
+    } else {
+      choicesBox.classList.remove("hidden");
+      pickedText.classList.add("hidden");
+      choicesBox.innerHTML = "";
+      getOfferedCards(targetIndex).forEach((card) => {
+        const btn = document.createElement("button");
+        btn.className = "card-btn";
+        btn.innerHTML = `<strong>${card.name}</strong><span>${card.desc}</span>`;
+        btn.addEventListener("click", () => pickCard(card.id));
+        choicesBox.appendChild(btn);
+      });
+    }
+  } else {
+    choicesBox.classList.add("hidden");
+    pickedText.classList.add("hidden");
+  }
+
+  const hostPanel = document.getElementById("mp-card-host-panel");
+  hostPanel.classList.toggle("hidden", !isHost);
+  if (!isHost) return;
+
+  const { data: picks } = await supabaseClient
+    .from("player_cards").select("player_id")
+    .eq("room_code", roomCode).eq("target_question_index", targetIndex);
+  const pickedCount = (picks || []).length;
+  document.getElementById("mp-card-progress-text").textContent =
+    `ผู้เล่นเลือกการ์ดแล้ว ${pickedCount}/${players.length} คน`;
+
+  const allPicked = players.length > 0 && pickedCount >= players.length;
+  document.getElementById("mp-card-all-picked-banner").classList.toggle("hidden", !allPicked);
+  document.getElementById("mp-host-next-after-cards-btn").classList.toggle("hidden", !allPicked);
+
+  const { data: events } = await supabaseClient
+    .from("card_events").select("*")
+    .eq("room_code", roomCode).eq("target_question_index", targetIndex)
+    .order("created_at", { ascending: true });
+  const log = document.getElementById("mp-card-events-log");
+  log.innerHTML = "";
+  (events || []).forEach((ev) => {
+    const p = document.createElement("p");
+    p.textContent = `🕵️ ${ev.from_player_name} ขโมย ${ev.amount} คะแนนจาก ${ev.to_player_name}`;
+    log.appendChild(p);
+  });
+}
+
+async function pickCard(cardId) {
+  document.getElementById("mp-card-choices").classList.add("hidden");
+  document.getElementById("mp-card-picked-text").classList.remove("hidden");
+
+  const { data, error } = await supabaseClient.functions.invoke("pick-card", {
+    body: { room_code: roomCode, player_id: myPlayerId, card_id: cardId }
+  });
+
+  if (error || data?.error) {
+    console.error("pick-card error:", error || data.error);
+    return;
+  }
+  if (data.stole) {
+    alert(`คุณขโมย ${data.stole.amount} คะแนนจาก ${data.stole.from}!`);
   }
 }
 
 // ============================================================
 // หน้าคำถาม + จับเวลา + สปินเนอร์รอหลังตอบ (ฝั่งผู้เล่น)
 // ============================================================
-function renderQuestionScreen(room) {
+async function renderQuestionScreen(room) {
   const isNewQuestion = renderQuestionScreen._lastIndex !== room.current_index;
   renderQuestionScreen._lastIndex = room.current_index;
   if (isNewQuestion) {
     hasAnsweredCurrent = false;
     lastAnswerResult = null;
+    myCardThisRound = null;
+    speedUpActive = false;
+    doubleChoiceSelection = [];
+    document.getElementById("mp-active-card-badge").classList.add("hidden");
+    document.getElementById("mp-frozen-overlay").classList.add("hidden");
+    document.getElementById("mp-confirm-double-btn").classList.add("hidden");
   }
 
   showScreen("mp-question-screen");
@@ -257,6 +416,7 @@ function renderQuestionScreen(room) {
     choicesBox.classList.add("hidden");
     waitingBox.classList.remove("hidden");
     document.getElementById("mp-host-skip-btn").classList.add("hidden");
+    document.getElementById("mp-confirm-double-btn").classList.add("hidden");
   } else {
     // ผู้เล่นที่ยังไม่ตอบ: โชว์ตัวเลือก
     choicesBox.classList.remove("hidden");
@@ -267,15 +427,20 @@ function renderQuestionScreen(room) {
       const btn = document.createElement("button");
       btn.className = "choice-btn";
       btn.textContent = text;
-      btn.addEventListener("click", () => submitAnswer(i, room));
+      btn.addEventListener("click", () => submitAnswer(i));
       choicesBox.appendChild(btn);
     });
+
+    if (isNewQuestion) {
+      await applyCardEffectsToQuestionUI(room, q, choicesBox);
+    }
   }
 
   const questionStartMs = new Date(room.question_start_at).getTime();
   const timerEl = document.getElementById("mp-timer");
   questionTimerInterval = setInterval(() => {
-    const elapsed = serverNow() - questionStartMs;
+    let elapsed = serverNow() - questionStartMs;
+    if (speedUpActive) elapsed = elapsed * 1.5; // การ์ด #7: เวลาเดินไวขึ้นสำหรับคนที่ไม่ได้ถือ (คิดคะแนนจริงยังใช้เวลาจริงที่ server เสมอ)
     const remain = Math.max(0, QUESTION_TIME_LIMIT_MS - elapsed);
     timerEl.textContent = Math.ceil(remain / 1000) + " วินาที";
     if (remain <= 0) {
@@ -285,18 +450,122 @@ function renderQuestionScreen(room) {
   }, 200);
 }
 
+// ---------- ใส่เอฟเฟกต์การ์ดลงบนหน้าคำถาม (เรียกครั้งเดียวตอนข้อใหม่เริ่ม) ----------
+async function applyCardEffectsToQuestionUI(room, q, choicesBox) {
+  const targetIndex = room.current_index;
+  const badge = document.getElementById("mp-active-card-badge");
+
+  const { data: myCard } = await supabaseClient
+    .from("player_cards").select("card_id")
+    .eq("room_code", roomCode).eq("target_question_index", targetIndex)
+    .eq("player_id", myPlayerId).maybeSingle();
+  myCardThisRound = myCard ? myCard.card_id : null;
+
+  if (myCardThisRound) {
+    const card = CARD_CATALOG.find((c) => c.id === myCardThisRound);
+    badge.textContent = `🃏 การ์ดที่ถืออยู่: ${card.name}`;
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+
+  // ---- การ์ด #3: เลือกได้ 2 คำตอบ ----
+  if (myCardThisRound === 3) {
+    setupDoubleChoiceUI(choicesBox, q);
+  }
+
+  // ---- การ์ด #5 / #8: ดูตัวเลือกที่ผิด ----
+  if (myCardThisRound === 5 || myCardThisRound === 8) {
+    const { data: hint } = await supabaseClient.functions.invoke("get-hint", {
+      body: { room_code: roomCode, player_id: myPlayerId, question_index: targetIndex }
+    });
+    if (hint && typeof hint.wrong_index === "number") {
+      const btn = choicesBox.children[hint.wrong_index];
+      if (btn) {
+        if (myCardThisRound === 5) {
+          btn.remove();
+        } else {
+          btn.classList.add("hint-wrong");
+        }
+      }
+    }
+  }
+
+  // ---- การ์ด #6: แช่แข็งคนอื่น (เช็คว่ามีใครถือการ์ดนี้ในรอบนี้ไหม และเราไม่ได้ถือ) ----
+  const { data: freezeHolders } = await supabaseClient
+    .from("player_cards").select("player_id")
+    .eq("room_code", roomCode).eq("target_question_index", targetIndex).eq("card_id", 6);
+  if (freezeHolders && freezeHolders.length > 0 && myCardThisRound !== 6) {
+    showFrozenOverlay(5000);
+  }
+
+  // ---- การ์ด #7: เร่งเวลาคนอื่น (ผลแค่ที่จอเรา ไม่กระทบคะแนนจริง) ----
+  const { data: speedHolders } = await supabaseClient
+    .from("player_cards").select("player_id")
+    .eq("room_code", roomCode).eq("target_question_index", targetIndex).eq("card_id", 7);
+  speedUpActive = !!(speedHolders && speedHolders.length > 0 && myCardThisRound !== 7);
+}
+
+function showFrozenOverlay(durationMs) {
+  const overlay = document.getElementById("mp-frozen-overlay");
+  const choicesBox = document.getElementById("mp-choices");
+  overlay.classList.remove("hidden");
+  choicesBox.style.pointerEvents = "none";
+  setTimeout(() => {
+    overlay.classList.add("hidden");
+    choicesBox.style.pointerEvents = "";
+  }, durationMs);
+}
+
+// ---------- การ์ด #3: เปลี่ยนปุ่มตัวเลือกให้เลือกได้ 2 อัน + ปุ่มยืนยัน ----------
+function setupDoubleChoiceUI(choicesBox, q) {
+  doubleChoiceSelection = [];
+  choicesBox.innerHTML = "";
+  q.choices.forEach((text, i) => {
+    const btn = document.createElement("button");
+    btn.className = "choice-btn";
+    btn.textContent = text;
+    btn.addEventListener("click", () => toggleDoubleChoice(i, btn));
+    choicesBox.appendChild(btn);
+  });
+  const confirmBtn = document.getElementById("mp-confirm-double-btn");
+  confirmBtn.classList.remove("hidden");
+  confirmBtn.disabled = true;
+  confirmBtn.onclick = () => {
+    if (doubleChoiceSelection.length === 2) {
+      confirmBtn.classList.add("hidden");
+      submitAnswer([...doubleChoiceSelection]);
+    }
+  };
+}
+function toggleDoubleChoice(i, btn) {
+  const idx = doubleChoiceSelection.indexOf(i);
+  if (idx >= 0) {
+    doubleChoiceSelection.splice(idx, 1);
+    btn.classList.remove("selected");
+  } else {
+    if (doubleChoiceSelection.length >= 2) return;
+    doubleChoiceSelection.push(i);
+    btn.classList.add("selected");
+  }
+  document.getElementById("mp-confirm-double-btn").disabled = doubleChoiceSelection.length !== 2;
+}
+
 // ============================================================
 // PLAYER: ส่งคำตอบ (ผ่าน Edge Function เท่านั้น — คิดคะแนน+เช็คเฉลยที่ server)
+// choiceOrArray: number ปกติ, หรือ [a, b] ถ้าถือการ์ด #3
 // ============================================================
-async function submitAnswer(choiceIndex, room) {
+async function submitAnswer(choiceOrArray) {
   if (hasAnsweredCurrent || isHost) return;
   hasAnsweredCurrent = true;
 
   document.getElementById("mp-choices").classList.add("hidden");
+  document.getElementById("mp-confirm-double-btn").classList.add("hidden");
+  document.getElementById("mp-frozen-overlay").classList.add("hidden");
   document.getElementById("mp-waiting-spinner").classList.remove("hidden");
 
   const { data, error } = await supabaseClient.functions.invoke("submit-answer", {
-    body: { room_code: roomCode, player_id: myPlayerId, choice: choiceIndex }
+    body: { room_code: roomCode, player_id: myPlayerId, choice: choiceOrArray }
   });
 
   if (error || data?.error) {
@@ -356,7 +625,7 @@ async function renderRevealScreen(room, players) {
     if (lastAnswerResult) {
       personalBox.textContent = lastAnswerResult.correct
         ? `✅ คุณตอบถูก! ได้ ${lastAnswerResult.points} คะแนน`
-        : "❌ คุณตอบผิด ได้ 0 คะแนน";
+        : `❌ คุณตอบผิด (${lastAnswerResult.points >= 0 ? "ได้ 0 คะแนน" : lastAnswerResult.points + " คะแนน"})`;
       personalBox.className = lastAnswerResult.correct ? "personal-result correct" : "personal-result wrong";
     } else {
       personalBox.textContent = "⏱️ คุณไม่ได้ตอบข้อนี้ทัน";
@@ -369,41 +638,111 @@ async function renderRevealScreen(room, players) {
   document.getElementById("mp-host-leaderboard-btn").classList.toggle("hidden", !isHost);
 }
 
+let leaderboardElements = {}; // เก็บ li element ของแต่ละผู้เล่นไว้ข้ามรอบ เพื่อทำอนิเมชันสลับตำแหน่ง
+
 // ============================================================
-// หน้ากระดานอันดับ (พร้อมเอฟเฟกต์ตัวเลขนับขึ้นสไตล์ LP counter)
+// หน้ากระดานอันดับ (พร้อมอนิเมชันสลับอันดับ + ตัวเลขนับขึ้นสไตล์ LP counter)
+// รวมผลจากการ์ดพลัง (โบนัส/ขโมย/ฯลฯ) เข้ากับอนิเมชันนับคะแนนด้วย
 // ============================================================
 async function renderLeaderboardScreen(room, players) {
   showScreen("mp-leaderboard-screen");
 
-  // ดึงคะแนนที่ได้ในข้อล่าสุด เพื่อรู้ว่าก่อนหน้านี้คะแนนรวมเท่าไหร่ (จะได้นับขึ้นจากจุดนั้น)
   const { data: answers } = await supabaseClient
     .from("answers").select("player_id, points").eq("room_code", roomCode).eq("question_index", room.current_index);
 
   const roundPointsByPlayer = {};
   (answers || []).forEach((a) => (roundPointsByPlayer[a.player_id] = a.points));
 
-  const sorted = [...players].sort((a, b) => b.total_score - a.total_score);
+  // ---------- ผลขโมยคะแนนที่เกิดขึ้นระหว่างเลือกการ์ดของรอบนี้ ----------
+  const { data: cardEvents } = await supabaseClient
+    .from("card_events").select("*").eq("room_code", roomCode).eq("target_question_index", room.current_index);
+  const thiefInfo = {};   // player_id (ผู้ขโมย) -> { amount, victimName }
+  const victimLoss = {};  // player_id (ผู้ถูกขโมย) -> ยอดรวมที่เสียไป
+  (cardEvents || []).forEach((ev) => {
+    thiefInfo[ev.from_player_id] = { amount: ev.amount, victimName: ev.to_player_name };
+    victimLoss[ev.to_player_id] = (victimLoss[ev.to_player_id] || 0) + ev.amount;
+  });
 
+  const sorted = [...players].sort((a, b) => b.total_score - a.total_score);
   const list = document.getElementById("mp-leaderboard-list");
+
+  // ---------- FIRST: จำตำแหน่งเดิมของแต่ละแถวก่อนสลับ ----------
+  const firstRects = {};
+  Object.keys(leaderboardElements).forEach((pid) => {
+    const el = leaderboardElements[pid];
+    if (el && el.isConnected) firstRects[pid] = el.getBoundingClientRect();
+  });
+
+  // เก็บอันดับเดิม (ก่อนข้อนี้) ไว้เทียบว่าใครขึ้น/ลง
+  const previousRank = {};
+  Object.keys(leaderboardElements).forEach((pid) => {
+    previousRank[pid] = leaderboardElements[pid]?.dataset.rank !== undefined
+      ? parseInt(leaderboardElements[pid].dataset.rank, 10)
+      : null;
+  });
+
+  // ---------- สร้าง/อัปเดตแถวใหม่ตามอันดับปัจจุบัน ----------
+  const newElements = {};
   list.innerHTML = "";
   sorted.forEach((p, i) => {
-    const li = document.createElement("li");
     const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
     const roundPoints = roundPointsByPlayer[p.id] || 0;
-    const startScore = Math.max(0, p.total_score - roundPoints);
+    const stealGain = thiefInfo[p.id] ? thiefInfo[p.id].amount : 0;
+    const stealLoss = victimLoss[p.id] || 0;
+    const totalDelta = roundPoints + stealGain - stealLoss;
+    const startScore = Math.max(0, p.total_score - totalDelta);
     const targetScore = p.total_score;
 
-    li.innerHTML = `<span>${medal} ${p.name}</span><span class="lp-counter" data-final="${targetScore}">${startScore}</span>`;
+    const li = document.createElement("li");
+    li.className = "leaderboard-row" + (i < 5 ? " top5" : "");
+    li.dataset.rank = i;
+    li.innerHTML = `<span class="lb-medal">${medal} ${p.name}</span><span class="lp-counter">${startScore}</span>`;
+    if (thiefInfo[p.id]) {
+      const note = document.createElement("div");
+      note.className = "steal-note";
+      note.textContent = `🗡️ ขโมย ${thiefInfo[p.id].amount} คะแนนจาก ${thiefInfo[p.id].victimName}`;
+      li.appendChild(note);
+    }
     list.appendChild(li);
+    newElements[p.id] = li;
 
-    const counterEl = li.querySelector(".lp-counter");
-    animateCountUp(counterEl, startScore, targetScore);
+    animateCountUp(li.querySelector(".lp-counter"), startScore, targetScore);
+
+    // ---------- เทียบอันดับเก่ากับใหม่ เพื่อใส่สีไฮไลต์ขึ้น/ลง ----------
+    const oldRank = previousRank[p.id];
+    if (oldRank !== null && oldRank !== undefined) {
+      if (oldRank > i) li.classList.add("rank-up");
+      else if (oldRank < i) li.classList.add("rank-down");
+    }
   });
+  leaderboardElements = newElements;
+
+  // ---------- LAST + INVERT + PLAY: ย้ายจากตำแหน่งเดิมมาตำแหน่งใหม่แบบเลื่อนลื่นๆ ----------
+  Object.keys(newElements).forEach((pid) => {
+    const el = newElements[pid];
+    const first = firstRects[pid];
+    if (!first) return; // แถวใหม่ (เพิ่งเข้าห้อง) ไม่ต้องเลื่อน
+    const last = el.getBoundingClientRect();
+    const deltaY = first.top - last.top;
+    if (deltaY === 0) return;
+
+    el.style.transform = `translateY(${deltaY}px)`;
+    el.style.transition = "none";
+    requestAnimationFrame(() => {
+      el.style.transition = "transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)";
+      el.style.transform = "translateY(0)";
+    });
+  });
+
+  // เอาคลาสไฮไลต์ขึ้น/ลงออกหลังอนิเมชันจบ ไม่ให้ค้างติดตาถาวร
+  setTimeout(() => {
+    Object.values(newElements).forEach((el) => el.classList.remove("rank-up", "rank-down"));
+  }, 1400);
 
   const isLast = room.current_index + 1 >= mpQuestions.length;
   const nextBtn = document.getElementById("mp-host-next-question-btn");
   nextBtn.classList.toggle("hidden", !isHost);
-  nextBtn.textContent = isLast ? "ดูผลสรุปสุดท้าย" : "ข้อถัดไป";
+  nextBtn.textContent = isLast ? "ดูผลสรุปสุดท้าย" : "ไปเลือกการ์ดพลัง";
 }
 
 // ---------- เอฟเฟกต์นับตัวเลขขึ้น สไตล์ Life Point counter (Yu-Gi-Oh) ----------
@@ -471,4 +810,5 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("mp-host-skip-btn")?.addEventListener("click", hostSkipQuestion);
   document.getElementById("mp-host-leaderboard-btn")?.addEventListener("click", showLeaderboard);
   document.getElementById("mp-host-next-question-btn")?.addEventListener("click", hostAdvanceFromLeaderboard);
+  document.getElementById("mp-host-next-after-cards-btn")?.addEventListener("click", hostStartNextQuestionAfterCards);
 });
