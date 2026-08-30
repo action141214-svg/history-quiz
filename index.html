@@ -10,6 +10,13 @@
 
 <div id="steal-flash-overlay"></div>
 
+<!-- ===== เพลงพื้นหลัง (เล่นวนลูปตั้งแต่เข้าเว็บจนจบเกม) ===== -->
+<audio id="bg-music" src="bgm.mp3" loop preload="auto"></audio>
+<div id="music-control">
+  <button id="music-toggle-btn" type="button" title="เปิด/ปิดเสียง">🔊</button>
+  <input id="music-volume-slider" type="range" min="0" max="100" value="40" title="ปรับความดัง">
+</div>
+
 <div class="container">
   <!-- ===== หน้าเลือกสร้าง/เข้าร่วมห้อง (หน้าแรกของเว็บ) ===== -->
   <div id="mp-home-screen" class="screen active">
@@ -126,6 +133,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 <script src="multiplayer.js"></script>
+<script src="music.js"></script>
 <script>
   // ปุ่มนำทางเล็กๆ ที่ใช้ร่วมกันหลายหน้า
   document.querySelectorAll(".back-to-start-btn, .back-to-mp-home-btn").forEach(b => b.addEventListener("click", () => showScreen("mp-home-screen")));
