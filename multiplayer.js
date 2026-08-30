@@ -24,6 +24,27 @@ let myCardThisRound = null;   // card_id ที่เราถืออยู่
 let speedUpActive = false;    // การ์ด #7 ทำให้ตัวจับเวลาของเราเดินไวขึ้น (คนอื่นถือ ไม่ใช่เรา)
 let doubleChoiceSelection = []; // สำหรับการ์ด #3 (เลือก 2 คำตอบ)
 
+// ---------- ระบบโปรไฟล์ (avatar) ----------
+let myAvatar = null; // avatar URL ปัจจุบันของฉัน (null = ยังไม่ได้เลือก)
+
+// รูปโปรไฟล์ให้เลือก 2 แบบ อัปโหลดไว้ที่ Supabase Storage bucket ชื่อ "avatars" (public bucket)
+// ⚠️ แทนที่ URL ด้านล่างด้วย public URL จริงหลังอัปโหลดรูป profile1.jpg / profile2.jpg ขึ้น Storage แล้ว
+const AVATAR_OPTIONS = [
+  { id: "avatar1", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile1.jpg" },
+  { id: "avatar2", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile2.jpg" }
+];
+
+// รูปโปรไฟล์เริ่มต้น (ยังไม่ได้เลือก) เป็นไอคอนคนเงาแบบ inline SVG ไม่ต้องพึ่งไฟล์ภายนอก
+const DEFAULT_AVATAR_URL =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<circle cx="50" cy="50" r="50" fill="#2b2d42"/>' +
+      '<circle cx="50" cy="38" r="18" fill="#556"/>' +
+      '<ellipse cx="50" cy="92" rx="32" ry="28" fill="#556"/>' +
+    "</svg>"
+  );
+
 const CARD_CATALOG = [
   { id: 1, name: "โบนัส +25%", desc: "ถ้าข้อถัดไปตอบถูก ได้คะแนนเพิ่ม 25%" },
   { id: 2, name: "เดิมพันเสี่ยง -10%", desc: "ถ้าข้อถัดไปตอบผิด เสียคะแนน 10% ของคะแนนปัจจุบัน" },
@@ -201,6 +222,7 @@ async function refreshRoomState() {
 
   if (room.status === "waiting") {
     showScreen("mp-lobby-screen");
+    setupLobbyProfileUI(players || []);
   } else if (room.status === "question") {
     await renderQuestionScreen(room);
   } else if (room.status === "reveal") {
@@ -221,9 +243,85 @@ function renderPlayerList(players) {
   document.getElementById("mp-player-count").textContent = players.length;
   players.forEach((p) => {
     const li = document.createElement("li");
-    li.textContent = p.name;
+
+    const img = document.createElement("img");
+    img.className = "avatar-circle";
+    img.src = p.avatar || DEFAULT_AVATAR_URL;
+    img.alt = p.name;
+
+    const span = document.createElement("span");
+    span.className = "player-list-name";
+    span.textContent = p.name + (p.id === myPlayerId ? " (คุณ)" : "");
+
+    li.appendChild(img);
+    li.appendChild(span);
     list.appendChild(li);
   });
+}
+
+// ============================================================
+// ระบบโปรไฟล์: แสดง/เปลี่ยนอวาตาร์ของฉันตอนอยู่หน้าล็อบบี้
+// ============================================================
+
+// สร้างตัวเลือกรูปโปรไฟล์ในตัวเลือก (เรียกครั้งเดียว)
+function renderAvatarPickerOptions() {
+  const picker = document.getElementById("mp-avatar-picker");
+  if (!picker || picker.dataset.built) return;
+  picker.dataset.built = "1";
+  AVATAR_OPTIONS.forEach((opt) => {
+    const img = document.createElement("img");
+    img.src = opt.url;
+    img.alt = "ตัวเลือกโปรไฟล์";
+    img.className = "avatar-option";
+    img.dataset.avatarUrl = opt.url;
+    img.addEventListener("click", () => selectAvatar(opt.url));
+    picker.appendChild(img);
+  });
+}
+
+function highlightSelectedAvatar(avatarUrl) {
+  const picker = document.getElementById("mp-avatar-picker");
+  if (!picker) return;
+  Array.from(picker.children).forEach((img) => {
+    img.classList.toggle("selected", img.dataset.avatarUrl === avatarUrl);
+  });
+}
+
+// เตรียม UI โปรไฟล์ตอนเข้าหน้าล็อบบี้: host ไม่ต้องเลือก, player เห็นรูปปัจจุบัน + ปุ่มเปลี่ยน
+function setupLobbyProfileUI(players) {
+  const section = document.getElementById("mp-my-profile-section");
+  if (!section) return;
+  if (isHost) {
+    section.classList.add("hidden");
+    return;
+  }
+  section.classList.remove("hidden");
+  const me = players.find((p) => p.id === myPlayerId);
+  myAvatar = (me && me.avatar) || null;
+  document.getElementById("mp-my-avatar-img").src = myAvatar || DEFAULT_AVATAR_URL;
+  highlightSelectedAvatar(myAvatar);
+}
+
+// เรียกตอนผู้เล่นกดเลือกรูปโปรไฟล์: ยิงไป Edge Function update-profile
+async function selectAvatar(avatarUrl) {
+  // กันเปลี่ยนหลังเกมเริ่มไปแล้ว (เผื่อ race condition ตอน host กดเริ่มพอดี)
+  const { data: room } = await supabaseClient.from("rooms").select("status").eq("code", roomCode).maybeSingle();
+  if (room && room.status !== "waiting") return;
+
+  const { data, error } = await supabaseClient.functions.invoke("update-profile", {
+    body: { room_code: roomCode, player_id: myPlayerId, avatar: avatarUrl }
+  });
+
+  if (error || data?.error) {
+    console.error("update-profile error:", error || data?.error);
+    alert("เปลี่ยนโปรไฟล์ไม่สำเร็จ กรุณาลองใหม่");
+    return;
+  }
+
+  myAvatar = avatarUrl;
+  document.getElementById("mp-my-avatar-img").src = avatarUrl;
+  document.getElementById("mp-avatar-picker").classList.add("hidden");
+  highlightSelectedAvatar(avatarUrl);
 }
 
 // ============================================================
@@ -696,7 +794,8 @@ async function renderLeaderboardScreen(room, players) {
     const li = document.createElement("li");
     li.className = "leaderboard-row" + (i < 5 ? " top5" : "");
     li.dataset.rank = i;
-    li.innerHTML = `<span class="lb-medal">${medal} ${p.name}</span><span class="lp-counter">${startScore}</span>`;
+    const avatarSrc = p.avatar || DEFAULT_AVATAR_URL;
+    li.innerHTML = `<span class="lb-row-left"><img class="avatar-circle avatar-small" src="${avatarSrc}" alt=""><span class="lb-medal">${medal} ${p.name}</span></span><span class="lp-counter">${startScore}</span>`;
     if (thiefInfo[p.id]) {
       const note = document.createElement("div");
       note.className = "steal-note";
@@ -785,7 +884,8 @@ function renderFinalScreen(players) {
   sorted.forEach((p, i) => {
     const li = document.createElement("li");
     const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
-    li.innerHTML = `<span>${medal} ${p.name}</span><span>${p.total_score} คะแนน</span>`;
+    const avatarSrc = p.avatar || DEFAULT_AVATAR_URL;
+    li.innerHTML = `<span class="lb-row-left"><img class="avatar-circle avatar-small" src="${avatarSrc}" alt=""><span>${medal} ${p.name}</span></span><span>${p.total_score} คะแนน</span>`;
     list.appendChild(li);
   });
 }
@@ -794,6 +894,10 @@ function renderFinalScreen(players) {
 // ปุ่มต่างๆ
 // ============================================================
 document.addEventListener("DOMContentLoaded", () => {
+  renderAvatarPickerOptions();
+  document.getElementById("mp-change-avatar-btn")?.addEventListener("click", () => {
+    document.getElementById("mp-avatar-picker").classList.toggle("hidden");
+  });
   document.getElementById("go-create-room-btn")?.addEventListener("click", () => showScreen("mp-create-screen"));
   document.getElementById("go-join-room-btn")?.addEventListener("click", () => showScreen("mp-join-screen"));
   document.getElementById("confirm-create-room-btn")?.addEventListener("click", () => createRoom());
