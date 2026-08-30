@@ -223,9 +223,34 @@ p {
   text-align: left;
 }
 .player-list-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ===== ปุ่มเตะผู้เล่นออกจากล็อบบี้ (host เท่านั้น) ===== */
+.kick-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #e74c3c;
+  background: transparent;
+  color: #e74c3c;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.kick-btn:hover {
+  background: #e74c3c;
+  color: #fff;
 }
 
 /* ===== รูปโปรไฟล์ทรงกลม ===== */

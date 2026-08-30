@@ -183,13 +183,41 @@ function listenToRoom(code) {
   roomChannel = supabaseClient
     .channel("room-" + code)
     .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `code=eq.${code}` }, () => refreshRoomState())
-    .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `room_code=eq.${code}` }, () => refreshRoomState())
+    .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `room_code=eq.${code}` }, (payload) => {
+      if (payload.eventType === "DELETE" && !isHost && payload.old?.id === myPlayerId) {
+        alert("คุณถูกเตะออกจากห้องโดยผู้คุมเกม");
+        resetToHome();
+        return;
+      }
+      refreshRoomState();
+    })
     .on("postgres_changes", { event: "*", schema: "public", table: "answers", filter: `room_code=eq.${code}` }, () => onAnswersChanged())
     .on("postgres_changes", { event: "*", schema: "public", table: "player_cards", filter: `room_code=eq.${code}` }, () => onCardsChanged())
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "card_events", filter: `room_code=eq.${code}` }, (payload) => onCardEvent(payload.new))
     .subscribe();
 
   refreshRoomState();
+}
+
+// ---------- ผู้เล่นที่ถูกเตะออก: เคลียร์สถานะแล้วกลับหน้าแรก ----------
+function resetToHome() {
+  if (roomChannel) supabaseClient.removeChannel(roomChannel);
+  roomChannel = null;
+  clearInterval(questionTimerInterval);
+  roomCode = null;
+  myPlayerId = null;
+  isHost = false;
+  showScreen("mp-home-screen");
+}
+
+// ---------- HOST: เตะผู้เล่นออกจากห้อง (ใช้ได้เฉพาะตอนอยู่ในล็อบบี้) ----------
+async function kickPlayer(playerId, playerName) {
+  if (!isHost) return;
+  if (!confirm(`ต้องการเตะ "${playerName}" ออกจากห้องใช่หรือไม่?`)) return;
+  const { error } = await supabaseClient.from("players").delete().eq("id", playerId);
+  if (error) {
+    alert("เตะผู้เล่นไม่สำเร็จ: " + error.message);
+  }
 }
 
 // ---------- เมื่อมีคนตอบเพิ่ม: host เช็คว่าตอบครบทุกคนหรือยัง ถ้าครบ auto เฉลยเลย ----------
@@ -272,6 +300,17 @@ function renderPlayerList(players) {
 
     li.appendChild(img);
     li.appendChild(span);
+
+    if (isHost) {
+      const kickBtn = document.createElement("button");
+      kickBtn.className = "kick-btn";
+      kickBtn.type = "button";
+      kickBtn.textContent = "✕";
+      kickBtn.title = "เตะออกจากห้อง";
+      kickBtn.addEventListener("click", () => kickPlayer(p.id, p.name));
+      li.appendChild(kickBtn);
+    }
+
     list.appendChild(li);
   });
 }
