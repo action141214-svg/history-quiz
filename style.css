@@ -681,3 +681,16 @@ p {
     width: 60px;
   }
 }
+#music-status {
+  position: fixed;
+  top: 56px;
+  right: 14px;
+  max-width: 240px;
+  background: rgba(231, 76, 60, 0.92);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  z-index: 500;
+  text-align: left;
+}

@@ -7,31 +7,59 @@
   const audio = document.getElementById("bg-music");
   const toggleBtn = document.getElementById("music-toggle-btn");
   const volumeSlider = document.getElementById("music-volume-slider");
+  const statusEl = document.getElementById("music-status");
   if (!audio || !toggleBtn || !volumeSlider) return;
 
   const VOLUME_STORAGE_KEY = "bgMusicVolume";
   const MUTED_STORAGE_KEY = "bgMusicMuted";
 
-  // จำค่าความดังล่าสุดที่ผู้เล่นตั้งไว้ (ถ้ามี) ไม่มีก็ใช้ค่าเริ่มต้นจาก slider
   const savedVolume = localStorage.getItem(VOLUME_STORAGE_KEY);
   const savedMuted = localStorage.getItem(MUTED_STORAGE_KEY) === "1";
 
   let currentVolume = savedVolume !== null ? parseInt(savedVolume, 10) : parseInt(volumeSlider.value, 10);
   let isMuted = savedMuted;
+  let hasStartedOnce = false;
 
   volumeSlider.value = currentVolume;
   audio.volume = currentVolume / 100;
   audio.muted = isMuted;
   updateToggleIcon();
 
+  function showStatus(text) {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.classList.remove("hidden");
+  }
+  function hideStatus() {
+    if (!statusEl) return;
+    statusEl.classList.add("hidden");
+  }
+
   function updateToggleIcon() {
-    if (isMuted || currentVolume === 0) {
+    if (audio.paused) {
+      toggleBtn.textContent = "▶️";
+    } else if (isMuted || currentVolume === 0) {
       toggleBtn.textContent = "🔇";
     } else if (currentVolume < 50) {
       toggleBtn.textContent = "🔉";
     } else {
       toggleBtn.textContent = "🔊";
     }
+  }
+
+  // ---------- สั่งเล่นเพลงแบบตรงๆ (เรียกจากอีเวนต์คลิกของผู้ใช้เท่านั้น เพื่อให้เบราว์เซอร์ยอมให้เล่น) ----------
+  function playNow() {
+    audio
+      .play()
+      .then(() => {
+        hasStartedOnce = true;
+        hideStatus();
+        updateToggleIcon();
+      })
+      .catch((err) => {
+        showStatus("⚠️ เล่นเพลงไม่ได้ (อุปกรณ์นี้อาจตั้งค่าบล็อกเสียงไว้) — " + (err && err.name ? err.name : ""));
+        updateToggleIcon();
+      });
   }
 
   // ---------- ปรับความดังด้วย slider ----------
@@ -45,39 +73,44 @@
     localStorage.setItem(VOLUME_STORAGE_KEY, String(currentVolume));
     localStorage.setItem(MUTED_STORAGE_KEY, isMuted ? "1" : "0");
     updateToggleIcon();
+    if (audio.paused) playNow();
   });
 
-  // ---------- ปุ่มมิวต์/เปิดเสียง ----------
+  // ---------- ปุ่ม: ถ้ายังไม่เล่น -> สั่งเล่นเลย / ถ้าเล่นอยู่ -> มิวต์สลับเปิด-ปิด ----------
   toggleBtn.addEventListener("click", () => {
+    if (audio.paused) {
+      playNow();
+      return;
+    }
     isMuted = !isMuted;
     audio.muted = isMuted;
     localStorage.setItem(MUTED_STORAGE_KEY, isMuted ? "1" : "0");
     updateToggleIcon();
   });
 
-  // ---------- เริ่มเล่นเพลง ----------
-  // เบราว์เซอร์ส่วนใหญ่บล็อกไม่ให้เล่นเสียงอัตโนมัติจนกว่าจะมีการโต้ตอบจากผู้ใช้ก่อน
-  // เลยพยายามเล่นทันที ถ้าโดนบล็อกก็ค่อยเล่นตอนผู้ใช้คลิก/แตะที่ไหนก็ได้ในหน้าเว็บครั้งแรก
-  function tryPlay() {
+  // ---------- ลองเล่นอัตโนมัติตอนโหลดหน้า (ถ้าเบราว์เซอร์อนุญาต) ----------
+  function tryAutoPlay() {
     const playPromise = audio.play();
-    if (playPromise && typeof playPromise.catch === "function") {
-      playPromise.catch(() => {
-        const resumeOnInteraction = () => {
-          audio.play().catch(() => {});
-          document.removeEventListener("click", resumeOnInteraction);
-          document.removeEventListener("touchstart", resumeOnInteraction);
-          document.removeEventListener("keydown", resumeOnInteraction);
-        };
-        document.addEventListener("click", resumeOnInteraction, { once: true });
-        document.addEventListener("touchstart", resumeOnInteraction, { once: true });
-        document.addEventListener("keydown", resumeOnInteraction, { once: true });
-      });
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise
+        .then(() => {
+          hasStartedOnce = true;
+          updateToggleIcon();
+        })
+        .catch(() => {
+          updateToggleIcon();
+          const resumeOnInteraction = () => {
+            if (!hasStartedOnce) playNow();
+            document.removeEventListener("click", resumeOnInteraction);
+          };
+          document.addEventListener("click", resumeOnInteraction, { once: true });
+        });
     }
   }
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
-    tryPlay();
+    tryAutoPlay();
   } else {
-    document.addEventListener("DOMContentLoaded", tryPlay);
+    document.addEventListener("DOMContentLoaded", tryAutoPlay);
   }
 })();
