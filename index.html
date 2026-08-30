@@ -11,20 +11,12 @@
 <div id="steal-flash-overlay"></div>
 
 <div class="container">
-  <div id="start-screen" class="screen active">
+  <!-- ===== หน้าเลือกสร้าง/เข้าร่วมห้อง (หน้าแรกของเว็บ) ===== -->
+  <div id="mp-home-screen" class="screen active">
     <h1>🪖 เกมตอบคำถาม<br>สงครามโลกครั้งที่สอง</h1>
-    <p>ทดสอบความรู้ของคุณด้วยคำถาม 4 ตัวเลือก</p>
-    <button id="start-btn" class="btn">เล่นคนเดียว</button>
-    <button id="go-multiplayer-btn" class="btn btn-outline">เล่นแบบห้อง (เรียลไทม์)</button>
-  </div>
-
-  <!-- ===== หน้าเลือกสร้าง/เข้าร่วมห้อง ===== -->
-  <div id="mp-home-screen" class="screen">
-    <h1>🌐 เล่นแบบห้อง</h1>
     <p>สร้างห้องใหม่เพื่อเป็นผู้คุมเกม หรือใส่รหัสห้องเพื่อเข้าร่วม</p>
     <button id="go-create-room-btn" class="btn">สร้างห้อง (ผู้คุมเกม)</button>
     <button id="go-join-room-btn" class="btn btn-outline">เข้าร่วมห้อง (ผู้เล่น)</button>
-    <button class="btn btn-text back-to-start-btn">← กลับ</button>
   </div>
 
   <div id="mp-create-screen" class="screen">
@@ -129,38 +121,14 @@
     <button class="btn back-to-start-btn">กลับหน้าแรก</button>
   </div>
 
-  <div id="quiz-screen" class="screen">
-    <div class="top-bar">
-      <span id="question-count">คำถามที่ 1/10</span>
-      <span id="score">คะแนน: 0</span>
-    </div>
-    <div class="progress-bar">
-      <div id="progress-fill"></div>
-    </div>
-    <h2 id="question-text">คำถาม</h2>
-    <div id="choices" class="choices"></div>
-    <p id="feedback"></p>
-    <button id="next-btn" class="btn hidden">ข้อถัดไป</button>
-  </div>
-
-  <div id="end-screen" class="screen">
-    <h1>จบเกม!</h1>
-    <p id="final-score" class="final-score"></p>
-    <p id="final-message"></p>
-    <button id="restart-btn" class="btn">เล่นอีกครั้ง</button>
-  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
-<script src="questions.js"></script>
-<script src="script.js"></script>
 <script src="multiplayer.js"></script>
 <script>
   // ปุ่มนำทางเล็กๆ ที่ใช้ร่วมกันหลายหน้า
-  document.getElementById("go-multiplayer-btn")?.addEventListener("click", () => showScreen("mp-home-screen"));
-  document.querySelectorAll(".back-to-start-btn").forEach(b => b.addEventListener("click", () => showScreen("start-screen")));
-  document.querySelectorAll(".back-to-mp-home-btn").forEach(b => b.addEventListener("click", () => showScreen("mp-home-screen")));
+  document.querySelectorAll(".back-to-start-btn, .back-to-mp-home-btn").forEach(b => b.addEventListener("click", () => showScreen("mp-home-screen")));
 </script>
 </body>
 </html>

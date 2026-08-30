@@ -7,6 +7,13 @@ const QUESTION_TIME_LIMIT_MS = 15000;
 const BASE_POINTS = 1000;
 const MIN_POINTS = 300;
 
+// ---------- ฟังก์ชันสลับหน้าจอ (ย้ายมาจาก script.js เดิมที่ถูกลบไป พร้อมโหมดเล่นคนเดียว) ----------
+function showScreen(target) {
+  const el = typeof target === "string" ? document.getElementById(target) : target;
+  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+  if (el) el.classList.add("active");
+}
+
 let roomCode = null;
 let myPlayerId = null;
 let myName = "";
