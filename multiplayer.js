@@ -33,23 +33,37 @@ let doubleChoiceSelection = []; // สำหรับการ์ด #3 (เล�
 
 // ---------- ระบบโปรไฟล์ (avatar) ----------
 let myAvatar = null; // avatar URL ปัจจุบันของฉัน (null = ยังไม่ได้เลือก)
+let AVATAR_OPTIONS = []; // โหลดสดจาก Supabase Storage — ไม่จำกัดจำนวน เพิ่มรูปได้เรื่อยๆ โดยไม่ต้องแก้โค้ด
 
-// รูปโปรไฟล์ให้เลือก 2 แบบ อัปโหลดไว้ที่ Supabase Storage bucket ชื่อ "avatars" (public bucket)
-// ⚠️ แทนที่ URL ด้านล่างด้วย public URL จริงหลังอัปโหลดรูป profile1.jpg / profile2.jpg ขึ้น Storage แล้ว
-const AVATAR_OPTIONS = [
-  { id: "avatar1", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile1.jpg" },
-  { id: "avatar2", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile2.jpg" },
-  { id: "avatar3", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile3.jpg" },
-  { id: "avatar4", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile4.jpg" },
-  { id: "avatar5", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile5.jpg" },
-  { id: "avatar6", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile6.jpg" },
-  { id: "avatar7", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile7.jpg" },
-  { id: "avatar8", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile8.jpg" },
-  { id: "avatar9", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile9.jpg" },
-  { id: "avatar10", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile10.jpg" },
-  { id: "avatar11", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile11.jpg" },
-  { id: "avatar12", url: "https://eysadufolqifvpbsgbum.supabase.co/storage/v1/object/public/avatars/profile12.jpg" }
-];
+const AVATAR_STORAGE_BUCKET = "avatars";
+
+// ---------- ดึงรายชื่อรูปทั้งหมดในคลัง Storage มาสร้างเป็นตัวเลือก ----------
+// อัปโหลดรูปตั้งชื่อ profile1.jpg, profile2.jpg, profile3.jpg, ... ต่อเลขไปเรื่อยๆ ได้เลย ไม่มีเพดานจำนวน
+async function loadAvatarOptionsFromStorage() {
+  const { data: files, error } = await supabaseClient.storage.from(AVATAR_STORAGE_BUCKET).list("", {
+    limit: 1000,
+    sortBy: { column: "name", order: "asc" }
+  });
+  if (error || !files) {
+    console.error("โหลดรายชื่อรูปโปรไฟล์ไม่สำเร็จ:", error);
+    AVATAR_OPTIONS = [];
+    return;
+  }
+
+  // กรองเฉพาะไฟล์รูปที่ตั้งชื่อแบบ profileN.jpg/png/jpeg/webp แล้วเรียงตามเลข N จากน้อยไปมาก
+  const matched = files
+    .map((f) => {
+      const m = f.name.match(/^profile(\d+)\.(jpg|jpeg|png|webp)$/i);
+      return m ? { name: f.name, num: parseInt(m[1], 10) } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.num - b.num);
+
+  AVATAR_OPTIONS = matched.map((f) => ({
+    id: "avatar" + f.num,
+    url: supabaseClient.storage.from(AVATAR_STORAGE_BUCKET).getPublicUrl(f.name).data.publicUrl
+  }));
+}
 
 // รูปโปรไฟล์เริ่มต้น (ยังไม่ได้เลือก) เป็นไอคอนคนเงาแบบ inline SVG ไม่ต้องพึ่งไฟล์ภายนอก
 const DEFAULT_AVATAR_URL =
@@ -328,11 +342,14 @@ function renderPlayerList(players) {
 // ระบบโปรไฟล์: แสดง/เปลี่ยนอวาตาร์ของฉันตอนอยู่หน้าล็อบบี้
 // ============================================================
 
-// สร้างตัวเลือกรูปโปรไฟล์ในตัวเลือก (เรียกครั้งเดียว)
-function renderAvatarPickerOptions() {
+// สร้างตัวเลือกรูปโปรไฟล์ในตัวเลือก (โหลดจาก Storage สดทุกครั้งที่เข้าล็อบบี้ กันพลาดรูปที่เพิ่งอัปโหลดเพิ่ม)
+async function renderAvatarPickerOptions() {
   const picker = document.getElementById("mp-avatar-picker");
-  if (!picker || picker.dataset.built) return;
-  picker.dataset.built = "1";
+  if (!picker) return;
+
+  await loadAvatarOptionsFromStorage();
+
+  picker.innerHTML = "";
   AVATAR_OPTIONS.forEach((opt) => {
     const img = document.createElement("img");
     img.src = opt.url;
@@ -342,6 +359,7 @@ function renderAvatarPickerOptions() {
     img.addEventListener("click", () => selectAvatar(opt.url));
     picker.appendChild(img);
   });
+  highlightSelectedAvatar(myAvatar);
 }
 
 function highlightSelectedAvatar(avatarUrl) {
@@ -959,9 +977,10 @@ function renderFinalScreen(players) {
 // ปุ่มต่างๆ
 // ============================================================
 document.addEventListener("DOMContentLoaded", () => {
-  renderAvatarPickerOptions();
   document.getElementById("mp-change-avatar-btn")?.addEventListener("click", () => {
-    document.getElementById("mp-avatar-picker").classList.toggle("hidden");
+    const picker = document.getElementById("mp-avatar-picker");
+    picker.classList.toggle("hidden");
+    if (!picker.classList.contains("hidden")) renderAvatarPickerOptions(); // โหลดรูปล่าสุดทุกครั้งที่เปิดแผงเลือก
   });
   document.getElementById("go-create-room-btn")?.addEventListener("click", () => showScreen("mp-create-screen"));
   document.getElementById("go-join-room-btn")?.addEventListener("click", () => showScreen("mp-join-screen"));
