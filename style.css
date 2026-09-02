@@ -755,3 +755,18 @@ p {
   color: #b8b8b8;
   font-size: 0.85rem;
 }
+
+/* ===== ตัวเลขนับถอยหลัง 3 วิ ก่อนเริ่มเกม ===== */
+.countdown-number {
+  font-size: 6rem;
+  font-weight: bold;
+  color: #f4a300;
+  text-align: center;
+  padding: 40px 0;
+  animation: countdown-pulse 1s ease-in-out infinite;
+}
+@keyframes countdown-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}

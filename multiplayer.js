@@ -328,6 +328,8 @@ async function refreshRoomState() {
   if (room.status === "waiting") {
     showScreen("mp-lobby-screen");
     setupLobbyProfileUI(players || []);
+  } else if (room.status === "countdown") {
+    renderCountdownScreen(room);
   } else if (room.status === "question") {
     await renderQuestionScreen(room);
   } else if (room.status === "reveal") {
@@ -445,7 +447,30 @@ async function selectAvatar(avatarUrl) {
 // HOST: ควบคุมการไหลของเกม
 // ============================================================
 async function hostStartGame() {
-  await goToQuestion(0);
+  await supabaseClient.from("rooms").update({
+    status: "countdown",
+    question_start_at: new Date().toISOString() // ใช้ช่องเดิมเป็นเวลาที่เริ่มนับถอยหลัง
+  }).eq("code", roomCode);
+
+  // host เป็นคนสั่งไปข้อแรกจริงๆ หลังนับครบ 3 วิ (ทุกคนแค่ดูตัวเลขนับถอยหลังจาก state นี้)
+  setTimeout(() => goToQuestion(0), 3000);
+}
+
+// ---------- หน้าจอนับถอยหลัง 3 วินาทีก่อนขึ้นคำถามข้อแรก ----------
+let countdownInterval = null;
+function renderCountdownScreen(room) {
+  showScreen("mp-countdown-screen");
+  clearInterval(countdownInterval);
+
+  const startMs = new Date(room.question_start_at).getTime();
+  const numberEl = document.getElementById("mp-countdown-number");
+
+  countdownInterval = setInterval(() => {
+    const elapsed = serverNow() - startMs;
+    const remain = Math.max(0, 3 - Math.floor(elapsed / 1000));
+    numberEl.textContent = remain > 0 ? remain : "เริ่ม!";
+    if (elapsed >= 3000) clearInterval(countdownInterval);
+  }, 100);
 }
 
 async function goToQuestion(index) {
