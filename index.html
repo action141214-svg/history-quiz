@@ -88,6 +88,7 @@
     </div>
     <p id="mp-active-card-badge" class="active-card-badge hidden"></p>
     <h2 id="mp-question-text">คำถาม</h2>
+    <img id="mp-question-image" class="question-image hidden" src="" alt="รูปคำถาม">
     <div id="mp-choices" class="choices"></div>
     <button id="mp-confirm-double-btn" class="btn hidden" disabled>ยืนยัน 2 คำตอบ</button>
     <div id="mp-frozen-overlay" class="frozen-overlay hidden">
@@ -138,8 +139,13 @@
 
   <!-- ===== สรุปผลสุดท้าย ===== -->
   <div id="mp-final-screen" class="screen">
-    <h1>🏆 สรุปผลสุดท้าย</h1>
+    <h1>🏆 สรุปผลสุดท้าย (ตามคะแนน)</h1>
     <ul id="mp-final-list" class="score-list"></ul>
+
+    <h1>✅ สรุปผลตามความแม่นยำ</h1>
+    <p>นับเฉพาะจำนวนข้อที่ตอบถูก ไม่ปนกับคะแนนที่ได้จากการ์ด/การขโมย — เหมาะใช้ตัดสินรางวัล</p>
+    <ul id="mp-final-accuracy-list" class="score-list"></ul>
+
     <button class="btn back-to-start-btn">กลับหน้าแรก</button>
   </div>
 

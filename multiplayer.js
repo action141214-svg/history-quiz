@@ -128,7 +128,7 @@ async function loadQuestionsFromServer() {
     alert("โหลดคำถามไม่สำเร็จ: " + (error?.message || "unknown"));
     return;
   }
-  mpQuestions = data.map((row) => ({ question: row.question, choices: row.choices }));
+  mpQuestions = data.map((row) => ({ question: row.question, choices: row.choices, image_url: row.image_url }));
 }
 
 // ---------- ซิงค์เวลากับ server ----------
@@ -339,7 +339,7 @@ async function refreshRoomState() {
   } else if (room.status === "card_pick") {
     await renderCardPickScreen(room, players || []);
   } else if (room.status === "ended") {
-    renderFinalScreen(players || []);
+    await renderFinalScreen(players || []);
   }
 }
 
@@ -641,7 +641,19 @@ async function renderQuestionScreen(room) {
 
   const q = mpQuestions[room.current_index];
   document.getElementById("mp-question-count").textContent = `ข้อ ${room.current_index + 1}/${mpQuestions.length}`;
-  document.getElementById("mp-question-text").textContent = q.question;
+
+  const questionTextEl = document.getElementById("mp-question-text");
+  const questionImageEl = document.getElementById("mp-question-image");
+  if (q.image_url) {
+    questionTextEl.classList.add("hidden");
+    questionImageEl.src = q.image_url;
+    questionImageEl.classList.remove("hidden");
+  } else {
+    questionImageEl.classList.add("hidden");
+    questionImageEl.src = "";
+    questionTextEl.classList.remove("hidden");
+    questionTextEl.textContent = q.question;
+  }
 
   const choicesBox = document.getElementById("mp-choices");
   const waitingBox = document.getElementById("mp-waiting-spinner");
@@ -1018,8 +1030,10 @@ function animateCountUp(element, startValue, endValue) {
 // ============================================================
 // หน้าสรุปผลสุดท้าย
 // ============================================================
-function renderFinalScreen(players) {
+async function renderFinalScreen(players) {
   showScreen("mp-final-screen");
+
+  // ---------- อันดับตามคะแนน (มีผลจากการ์ด/การขโมยปะปนอยู่) ----------
   const sorted = [...players].sort((a, b) => b.total_score - a.total_score);
   const list = document.getElementById("mp-final-list");
   list.innerHTML = "";
@@ -1030,6 +1044,37 @@ function renderFinalScreen(players) {
     li.innerHTML = `<span class="lb-row-left"><img class="avatar-circle avatar-small" src="${avatarSrc}" alt=""><span>${medal} ${p.name}</span></span><span>${p.total_score} คะแนน</span>`;
     list.appendChild(li);
   });
+
+  // ---------- สรุป "ตอบถูกกี่ข้อ" ล้วนๆ ไม่ปนกับคะแนนที่โดนการ์ด/ขโมย ----------
+  // เหมาะเอาไว้ตัดสินรางวัลในห้องเรียน เพราะยุติธรรมกว่าคะแนนที่อาจถูกขโมยไป
+  const { data: answers } = await supabaseClient
+    .from("answers")
+    .select("player_id, correct")
+    .eq("room_code", roomCode);
+
+  const correctCountByPlayer = {};
+  (answers || []).forEach((a) => {
+    if (!correctCountByPlayer[a.player_id]) correctCountByPlayer[a.player_id] = 0;
+    if (a.correct) correctCountByPlayer[a.player_id]++;
+  });
+
+  const totalQuestions = mpQuestions.length;
+  const byAccuracy = [...players].sort(
+    (a, b) => (correctCountByPlayer[b.id] || 0) - (correctCountByPlayer[a.id] || 0)
+  );
+
+  const accuracyBox = document.getElementById("mp-final-accuracy-list");
+  if (accuracyBox) {
+    accuracyBox.innerHTML = "";
+    byAccuracy.forEach((p, i) => {
+      const li = document.createElement("li");
+      const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
+      const avatarSrc = p.avatar || DEFAULT_AVATAR_URL;
+      const correctCount = correctCountByPlayer[p.id] || 0;
+      li.innerHTML = `<span class="lb-row-left"><img class="avatar-circle avatar-small" src="${avatarSrc}" alt=""><span>${medal} ${p.name}</span></span><span>${correctCount}/${totalQuestions} ข้อ</span>`;
+      accuracyBox.appendChild(li);
+    });
+  }
 }
 
 // ============================================================
