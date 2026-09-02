@@ -25,6 +25,37 @@ let roomChannel = null;
 let autoRevealChecked = false;
 let mpQuestions = []; // โหลดจาก Supabase (quiz_questions_public) แทนไฟล์ questions.js เดิม เพื่อไม่ให้เฉลยหลุดไปกับ client
 let lastAnswerResult = null; // เก็บผลลัพธ์ล่าสุดจาก Edge Function (ถูก/ผิด/คะแนน) ไว้โชว์ตอนเฉลย
+let selectedGameSlug = null; // เกม/หมวดคำถามที่ host เลือกไว้ตอนสร้างห้อง
+
+// ---------- โหลดรายชื่อเกมทั้งหมด (โตได้เรื่อยๆ ไม่ต้องแก้โค้ดเวลาเพิ่มเกมใหม่) ----------
+async function loadGameList() {
+  const { data, error } = await supabaseClient
+    .from("quiz_games")
+    .select("*")
+    .order("sort_order", { ascending: true });
+
+  const box = document.getElementById("mp-game-list");
+  if (!box) return;
+  box.innerHTML = "";
+
+  if (error || !data || data.length === 0) {
+    box.innerHTML = `<p class="error-text">โหลดรายชื่อเกมไม่สำเร็จ</p>`;
+    return;
+  }
+
+  data.forEach((game) => {
+    const card = document.createElement("button");
+    card.className = "game-card";
+    card.innerHTML = `<span class="game-card-logo">${game.logo_emoji}</span>
+      <span class="game-card-name">${game.name}</span>
+      <span class="game-card-desc">${game.description}</span>`;
+    card.addEventListener("click", () => {
+      selectedGameSlug = game.slug;
+      showScreen("mp-create-screen");
+    });
+    box.appendChild(card);
+  });
+}
 
 // ---------- สถานะเกี่ยวกับการ์ด ----------
 let myCardThisRound = null;   // card_id ที่เราถืออยู่สำหรับคำถามข้อปัจจุบัน
@@ -86,11 +117,12 @@ const CARD_CATALOG = [
   { id: 9, name: "ดับเบิลออร์นัธติ้ง", desc: "ตอบถูกได้คะแนน x2 แต่ถ้าตอบผิดคะแนนเหลือ 0 ทันที" }
 ];
 
-// ---------- โหลดคำถาม (ไม่มีเฉลยติดมาด้วย) จาก view ที่ปลอดภัย ----------
+// ---------- โหลดคำถาม (ไม่มีเฉลยติดมาด้วย) จาก view ที่ปลอดภัย เฉพาะเกมที่เลือก ----------
 async function loadQuestionsFromServer() {
   const { data, error } = await supabaseClient
     .from("quiz_questions_public")
     .select("*")
+    .eq("game_slug", selectedGameSlug)
     .order("question_index", { ascending: true });
   if (error || !data) {
     alert("โหลดคำถามไม่สำเร็จ: " + (error?.message || "unknown"));
@@ -121,6 +153,11 @@ function generateRoomCode() {
 // HOST: สร้างห้อง
 // ============================================================
 async function createRoom() {
+  if (!selectedGameSlug) {
+    alert("กรุณาเลือกเกมก่อน");
+    showScreen("mp-game-select-screen");
+    return;
+  }
   await syncServerTime();
   await loadQuestionsFromServer();
   const code = generateRoomCode();
@@ -132,7 +169,8 @@ async function createRoom() {
     code,
     status: "waiting",
     current_index: -1,
-    question_start_at: null
+    question_start_at: null,
+    game_slug: selectedGameSlug
   });
   if (error) {
     alert("สร้างห้องไม่สำเร็จ: " + error.message);
@@ -152,7 +190,6 @@ async function createRoom() {
 // ============================================================
 async function joinRoom(code, playerName) {
   await syncServerTime();
-  await loadQuestionsFromServer();
 
   const { data: room, error: roomErr } = await supabaseClient
     .from("rooms").select("*").eq("code", code).maybeSingle();
@@ -165,6 +202,9 @@ async function joinRoom(code, playerName) {
     document.getElementById("join-error").textContent = "ห้องนี้เริ่มเกมไปแล้ว ไม่สามารถเข้าร่วมได้";
     return false;
   }
+
+  selectedGameSlug = room.game_slug; // เข้าเกมเดียวกับที่ host เลือกไว้
+  await loadQuestionsFromServer();
 
   const { data: player, error: playerErr } = await supabaseClient
     .from("players").insert({ room_code: code, name: playerName, total_score: 0 }).select().single();
@@ -972,10 +1012,11 @@ function renderFinalScreen(players) {
 // ============================================================
 document.addEventListener("DOMContentLoaded", () => {
   renderAvatarPickerOptions();
+  loadGameList();
   document.getElementById("mp-change-avatar-btn")?.addEventListener("click", () => {
     document.getElementById("mp-avatar-picker").classList.toggle("hidden");
   });
-  document.getElementById("go-create-room-btn")?.addEventListener("click", () => showScreen("mp-create-screen"));
+  document.getElementById("go-create-room-btn")?.addEventListener("click", () => showScreen("mp-game-select-screen"));
   document.getElementById("go-join-room-btn")?.addEventListener("click", () => showScreen("mp-join-screen"));
   document.getElementById("confirm-create-room-btn")?.addEventListener("click", () => createRoom());
   document.getElementById("confirm-join-room-btn")?.addEventListener("click", () => {

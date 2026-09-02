@@ -707,3 +707,51 @@ p {
     background-attachment: scroll;
   }
 }
+
+/* ============================================================
+   Quiz? branding + หน้าเลือกเกม — เพิ่มเข้ามาใหม่
+   ============================================================ */
+.quiz-logo {
+  font-size: 2.4rem;
+  letter-spacing: 1px;
+}
+.quiz-logo-mark {
+  color: #eaeaea;
+  -webkit-text-stroke: 2px #f4a300;
+}
+
+.game-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 20px 0;
+}
+.game-card {
+  background: #0f172a;
+  color: #eaeaea;
+  border: 2px solid #2b2d42;
+  border-radius: 12px;
+  padding: 18px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.game-card:hover {
+  border-color: #f4a300;
+  transform: translateY(-2px);
+}
+.game-card-logo {
+  font-size: 1.8rem;
+}
+.game-card-name {
+  font-weight: bold;
+  color: #f4a300;
+  font-size: 1.1rem;
+}
+.game-card-desc {
+  color: #b8b8b8;
+  font-size: 0.85rem;
+}

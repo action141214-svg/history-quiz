@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>เกมตอบคำถาม: สงครามโลกครั้งที่สอง</title>
+<title>Quiz? — เกมตอบคำถามออนไลน์</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,17 +21,25 @@
 <div class="container">
   <!-- ===== หน้าเลือกสร้าง/เข้าร่วมห้อง (หน้าแรกของเว็บ) ===== -->
   <div id="mp-home-screen" class="screen active">
-    <h1>🪖 เกมตอบคำถาม<br>สงครามโลกครั้งที่สอง</h1>
-    <p>สร้างห้องใหม่เพื่อเป็นผู้คุมเกม หรือใส่รหัสห้องเพื่อเข้าร่วม</p>
+    <h1 class="quiz-logo">🎯 Quiz<span class="quiz-logo-mark">?</span></h1>
+    <p>แพลตฟอร์มเกมตอบคำถามออนไลน์ เล่นสดเป็นห้องกับเพื่อน</p>
     <button id="go-create-room-btn" class="btn">สร้างห้อง (ผู้คุมเกม)</button>
     <button id="go-join-room-btn" class="btn btn-outline">เข้าร่วมห้อง (ผู้เล่น)</button>
+  </div>
+
+  <!-- ===== หน้าเลือกเกม/หมวดคำถาม ===== -->
+  <div id="mp-game-select-screen" class="screen">
+    <h1>เลือกเกมที่จะเล่น</h1>
+    <p>แต่ละเกมมีชุดคำถามของตัวเอง</p>
+    <div id="mp-game-list" class="game-list"></div>
+    <button class="btn btn-text back-to-start-btn">← กลับ</button>
   </div>
 
   <div id="mp-create-screen" class="screen">
     <h1>สร้างห้อง</h1>
     <p>ระบบจะสุ่มรหัสห้อง 6 หลักให้อัตโนมัติ</p>
     <button id="confirm-create-room-btn" class="btn">สร้างห้องเลย</button>
-    <button class="btn btn-text back-to-mp-home-btn">← กลับ</button>
+    <button class="btn btn-text" onclick="showScreen('mp-game-select-screen')">← กลับ</button>
   </div>
 
   <div id="mp-join-screen" class="screen">
