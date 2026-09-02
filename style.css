@@ -28,6 +28,18 @@ body {
   padding: 32px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.5);
   color: #eaeaea;
+  overflow: hidden; /* กันไม่ให้รูป/องค์ประกอบข้างในล้นออกจากมุมโค้งของกล่อง */
+}
+
+/* ===== ปรับให้พอดีจอมือถือ: ลด padding รอบตัวลง เพื่อให้มีพื้นที่แสดงเนื้อหามากขึ้น ===== */
+@media (max-width: 480px) {
+  body {
+    padding: 8px;
+  }
+  .container {
+    padding: 18px;
+    border-radius: 12px;
+  }
 }
 
 .screen {
@@ -769,4 +781,22 @@ p {
   0% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.15); opacity: 0.8; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+/* ===== รูปภาพประกอบคำถาม (คำถามแบบรูปภาพล้วน) ===== */
+.question-image {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #0f172a;
+  border: 1px solid #2b2d42;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 480px) {
+  .question-image {
+    max-height: 200px;
+  }
 }
