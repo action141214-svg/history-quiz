@@ -1047,21 +1047,28 @@ async function renderFinalScreen(players) {
 
   // ---------- สรุป "ตอบถูกกี่ข้อ" ล้วนๆ ไม่ปนกับคะแนนที่โดนการ์ด/ขโมย ----------
   // เหมาะเอาไว้ตัดสินรางวัลในห้องเรียน เพราะยุติธรรมกว่าคะแนนที่อาจถูกขโมยไป
+  // ถ้าตอบถูกจำนวนข้อเท่ากัน ตัดสินด้วยเวลารวมที่ใช้ตอบ (ยิ่งเร็วยิ่งได้อันดับดีกว่า)
   const { data: answers } = await supabaseClient
     .from("answers")
-    .select("player_id, correct")
+    .select("player_id, correct, elapsed_ms")
     .eq("room_code", roomCode);
 
   const correctCountByPlayer = {};
+  const totalElapsedByPlayer = {};
   (answers || []).forEach((a) => {
     if (!correctCountByPlayer[a.player_id]) correctCountByPlayer[a.player_id] = 0;
+    if (!totalElapsedByPlayer[a.player_id]) totalElapsedByPlayer[a.player_id] = 0;
     if (a.correct) correctCountByPlayer[a.player_id]++;
+    totalElapsedByPlayer[a.player_id] += a.elapsed_ms || 0;
   });
 
   const totalQuestions = mpQuestions.length;
-  const byAccuracy = [...players].sort(
-    (a, b) => (correctCountByPlayer[b.id] || 0) - (correctCountByPlayer[a.id] || 0)
-  );
+  const byAccuracy = [...players].sort((a, b) => {
+    const correctDiff = (correctCountByPlayer[b.id] || 0) - (correctCountByPlayer[a.id] || 0);
+    if (correctDiff !== 0) return correctDiff;
+    // ตอบถูกเท่ากัน -> ใครใช้เวลารวมน้อยกว่า (ตอบไวกว่า) ได้อันดับดีกว่า
+    return (totalElapsedByPlayer[a.id] || 0) - (totalElapsedByPlayer[b.id] || 0);
+  });
 
   const accuracyBox = document.getElementById("mp-final-accuracy-list");
   if (accuracyBox) {
