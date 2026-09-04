@@ -641,13 +641,13 @@ p {
 }
 #steal-flash-overlay.show {
   opacity: 1;
-  animation: steal-flash-blink 0.4s ease 3;
+  animation: steal-flash-blink 0.4s ease infinite; /* กระพริบตลอด 3 วิจนกว่า JS จะเอาคลาสออก แทนที่จะกระพริบแค่ 3 ครั้งแล้วค้างนิ่ง */
 }
 #steal-flash-overlay.show-good {
   background: rgba(46, 204, 113, 0.85);
 }
 #steal-flash-overlay.show-good.show {
-  animation: shield-flash-blink 0.4s ease 3;
+  animation: shield-flash-blink 0.4s ease infinite;
 }
 @keyframes steal-flash-blink {
   0%, 100% { background: rgba(231, 76, 60, 0.85); }

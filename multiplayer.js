@@ -348,7 +348,7 @@ function triggerCardFlash(message, kind) {
   overlay.textContent = message;
   overlay.classList.remove("show-warning", "show-good");
   overlay.classList.add(kind === "good" ? "show-good" : "show-warning", "show");
-  setTimeout(() => overlay.classList.remove("show", "show-warning", "show-good"), 2500);
+  setTimeout(() => overlay.classList.remove("show", "show-warning", "show-good"), 3000); // ขยายเวลากระพริบเป็น 3 วินาที
 }
 
 // ---------- ดึงข้อมูลห้องล่าสุดแล้ว render ----------
