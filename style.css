@@ -662,8 +662,7 @@ p {
 .ink-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(10, 10, 20, 0.92);
-  backdrop-filter: blur(6px);
+  background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -672,7 +671,7 @@ p {
   font-size: 1.05rem;
   border-radius: 12px;
   z-index: 50;
-  pointer-events: none;
+  pointer-events: auto; /* จอดำสนิท กันกดตัวเลือกมั่วตอนมองไม่เห็นด้วย */
 }
 #mp-question-screen { position: relative; }
 

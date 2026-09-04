@@ -3,7 +3,7 @@
 // states: waiting -> question -> reveal -> leaderboard -> card_pick -> (next question) / ended
 // ============================================================
 
-const QUESTION_TIME_LIMIT_MS = 15000;
+const QUESTION_TIME_LIMIT_MS = 30000; // ปรับจาก 15 วิ เป็น 30 วิ
 const BASE_POINTS = 1000;
 const MIN_POINTS = 300;
 
@@ -78,6 +78,7 @@ let pendingStealCardId = null; // ใช้ระหว่างเลือก�
 let freezePending = false;      // มีคนถือการ์ดแช่แข็งในรอบนี้ (และไม่ใช่เรา)
 let speedOwnerId = null;        // player_id ของคนถือการ์ดเร่งเวลาในรอบนี้ (null ถ้าไม่มี)
 let fiveSecCheckDone = false;   // เช็คเงื่อนไขตอนเหลือ 5 วิไปแล้วหรือยัง (ทำครั้งเดียวต่อข้อ)
+let twoSecForceCheckDone = false; // เช็คเงื่อนไขบังคับตอบช้าตอนเหลือ 2 วิไปแล้วหรือยัง (ทำครั้งเดียวต่อข้อ)
 let speedRushActive = false;    // ตอนนี้เวลากำลังถูกเร่งอยู่ (สำหรับผู้เล่นที่ไม่ใช่เจ้าของการ์ด)
 let rushStartMs = null;         // เวลา (server time) ตอนเริ่มเร่ง ใช้คำนวณเวลาที่เหลือ
 let choicesRevealed = false;    // ผ่านช่วงอ่านโจทย์แล้วหรือยัง (เปิดให้ตอบแล้ว)
@@ -722,6 +723,7 @@ async function renderQuestionScreen(room) {
     freezePending = false;
     speedOwnerId = null;
     fiveSecCheckDone = false;
+    twoSecForceCheckDone = false;
     speedRushActive = false;
     rushStartMs = null;
     choicesRevealed = false;
@@ -757,8 +759,28 @@ async function renderQuestionScreen(room) {
   const waitingBox = document.getElementById("mp-waiting-spinner");
   const timerEl = document.getElementById("mp-timer");
   document.getElementById("mp-host-skip-btn").classList.toggle("hidden", !isHost);
-  waitingBox.classList.add("hidden");
-  choicesBox.classList.add("hidden");
+
+  // ---------- BUG FIX: renderQuestionScreen ถูกเรียกซ้ำทุกครั้งที่ "ผู้เล่นคนใดคนหนึ่ง" ในห้องส่งคำตอบ
+  // (เพราะ realtime subscription ฟังตาราง answers ทั้งห้อง ไม่ใช่แค่ของตัวเอง) เดิมโค้ดจะซ่อนกล่องตัวเลือก/
+  // สปินเนอร์ทิ้งไปเฉยๆ ทุกครั้งที่ re-render แล้วคาดหวังให้ setInterval ข้างล่างเรียก buildChoicesUI() มา
+  // เปิดกลับ แต่ buildChoicesUI() ถูก guard ด้วย choicesRevealed ซึ่งเป็น true ไปแล้วตั้งแต่รอบก่อนหน้า จึงไม่ถูก
+  // เรียกซ้ำอีก -> ปุ่มตัวเลือกหายไปเฉยๆ ผู้เล่นกดอะไรไม่ได้จนหมดเวลา แล้วกลายเป็น "ตอบช้า/ไม่ได้คะแนน" ทั้งที่ยังไม่ได้กดตอบเลย
+  // แก้โดย sync การแสดงผลจาก state ปัจจุบันทุกครั้งที่ render แทนที่จะซ่อนตายตัวแล้วรอ interval มาช่วยเปิด
+  if (isHost) {
+    choicesBox.classList.add("hidden");
+    waitingBox.classList.add("hidden");
+  } else if (!choicesRevealed) {
+    // ยังอยู่ช่วงอ่านโจทย์ (หรือยังไม่เคยสร้างปุ่มตัวเลือกเลย) -> ซ่อนไว้ก่อน รอ interval เปิดตอนอ่านจบ
+    choicesBox.classList.add("hidden");
+    waitingBox.classList.add("hidden");
+  } else if (hasAnsweredCurrent) {
+    choicesBox.classList.add("hidden");
+    waitingBox.classList.remove("hidden");
+  } else {
+    // เคยสร้างปุ่มตัวเลือกไปแล้วและยังไม่ได้ตอบ -> ต้องเห็นปุ่มเสมอ ไม่ว่าจะ re-render กี่ครั้งก็ตาม
+    choicesBox.classList.remove("hidden");
+    waitingBox.classList.add("hidden");
+  }
 
   // ---------- ยังต้องแสดงตัวเลือกไหม (ผ่านช่วงอ่านโจทย์ + ยังไม่ได้ตอบ + ไม่ใช่ host) ----------
   function buildChoicesUI() {
@@ -825,11 +847,46 @@ async function renderQuestionScreen(room) {
       }
     }
 
+    // ---------- ปรับใหม่: เหลือ 2 วิ ถ้ายังไม่ตอบและกำลังโดนการ์ดแช่แข็ง/เร่งเวลาอยู่ -> บังคับตอบช้าอัตโนมัติ ----------
+    if (remain <= 2000 && remain > 0 && !twoSecForceCheckDone && !isHost && !hasAnsweredCurrent) {
+      const stillFrozen = freezePending; // freezePending จะเป็น true ก็ต่อเมื่อเรายังไม่ตอบและไม่ใช่เจ้าของการ์ด (ดูด้านบน)
+      const stillRushed = speedRushActive && myPlayerId !== speedOwnerId;
+      if (stillFrozen || stillRushed) {
+        twoSecForceCheckDone = true;
+        forceLateAnswer(stillFrozen ? "freeze" : "speed");
+      }
+    }
+
     if (remain <= 0) {
       clearInterval(questionTimerInterval);
       if (isHost) revealAnswer();
     }
   }, 200);
+}
+
+// ---------- บังคับส่งคำตอบแบบ "ตอบช้า" อัตโนมัติ เมื่อโดนการ์ดแช่แข็ง/เร่งเวลาจนตอบไม่ทัน (เหลือ 2 วิ) ----------
+async function forceLateAnswer(cause) {
+  hasAnsweredCurrent = true;
+  document.getElementById("mp-choices").classList.add("hidden");
+  document.getElementById("mp-confirm-double-btn").classList.add("hidden");
+  document.getElementById("mp-frozen-overlay").classList.add("hidden");
+  document.getElementById("mp-waiting-spinner").classList.remove("hidden");
+
+  const message = cause === "freeze"
+    ? "❄️ คุณถูกการ์ดแช่แข็งคู่แข่ง จนตอบไม่ทัน ระบบส่งคำตอบให้อัตโนมัติ!"
+    : "⏱️ คุณถูกการ์ดเร่งเวลาคู่แข่ง จนตอบไม่ทัน ระบบส่งคำตอบให้อัตโนมัติ!";
+  triggerCardFlash(message, "warning");
+
+  const { data, error } = await supabaseClient.functions.invoke("submit-answer", {
+    body: { room_code: roomCode, player_id: myPlayerId, choice: -1 }
+  });
+
+  if (error || data?.error) {
+    console.error("submit-answer (forced late) error:", error || data.error);
+    lastAnswerResult = null;
+    return;
+  }
+  lastAnswerResult = data;
 }
 
 // ---------- แคชรายชื่อคนที่ตอบไปแล้วของข้อปัจจุบัน (ใช้เช็คเงื่อนไขการ์ดแช่แข็ง/เร่งเวลา) ----------
