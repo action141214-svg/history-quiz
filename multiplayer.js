@@ -334,6 +334,9 @@ async function onCardsChanged() {
 function onCardEvent(ev) {
   if (ev.type === "steal" && ev.to_player_id === myPlayerId) {
     triggerCardFlash(`⚠️ ${ev.from_player_name} ขโมยคะแนนคุณไป ${ev.amount} คะแนน!`, "warning");
+  } else if (ev.type === "steal" && ev.from_player_id === myPlayerId) {
+    // BUG FIX: เดิมฝั่งคนขโมย (from_player) ไม่เคยได้รับแจ้งเตือนเลย เห็นแค่ฝั่งถูกขโมยอย่างเดียว
+    triggerCardFlash(`🕵️ คุณขโมยคะแนนจาก ${ev.to_player_name} ไปได้ ${ev.amount} คะแนน!`, "good");
   } else if (ev.type === "reflect_steal" && ev.to_player_id === myPlayerId) {
     triggerCardFlash(`🛡️ ${ev.from_player_name} สะท้อนขโมยคะแนนกลับคืน คุณเสีย ${ev.amount} คะแนน!`, "warning");
   } else if (ev.type === "reflect_steal" && ev.from_player_id === myPlayerId) {
