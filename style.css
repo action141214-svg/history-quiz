@@ -643,9 +643,72 @@ p {
   opacity: 1;
   animation: steal-flash-blink 0.4s ease 3;
 }
+#steal-flash-overlay.show-good {
+  background: rgba(46, 204, 113, 0.85);
+}
+#steal-flash-overlay.show-good.show {
+  animation: shield-flash-blink 0.4s ease 3;
+}
 @keyframes steal-flash-blink {
   0%, 100% { background: rgba(231, 76, 60, 0.85); }
   50% { background: rgba(231, 76, 60, 0.4); }
+}
+@keyframes shield-flash-blink {
+  0%, 100% { background: rgba(46, 204, 113, 0.85); }
+  50% { background: rgba(46, 204, 113, 0.4); }
+}
+
+/* ---------- overlay หมึกบดบังวิสัยทัศน์ (การ์ด #10) ---------- */
+.ink-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 20, 0.92);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #d8d8ff;
+  font-size: 1.05rem;
+  border-radius: 12px;
+  z-index: 50;
+  pointer-events: none;
+}
+#mp-question-screen { position: relative; }
+
+/* ---------- หน้าต่างเลือกเป้าหมายขโมยคะแนน (การ์ด #4) ---------- */
+.steal-target-picker {
+  background: #0f172a;
+  border: 2px solid #e74c3c;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 14px;
+}
+.steal-target-picker h3 {
+  color: #ffb3ab;
+  font-size: 0.95rem;
+  margin: 0 0 10px;
+}
+.steal-target-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.steal-target-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1a1c2e;
+  border: 1px solid #2b2d42;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #eaeaea;
+  cursor: pointer;
+  text-align: left;
+}
+.steal-target-btn:hover {
+  border-color: #e74c3c;
 }
 
 /* ---------- ข้อความ "ขโมยไป" ใต้ชื่อในกระดานอันดับ ---------- */
