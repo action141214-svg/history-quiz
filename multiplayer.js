@@ -74,6 +74,7 @@ let myCardThisRound = null;   // card_id ที่เราถืออยู่
 let doubleChoiceSelection = []; // สำหรับการ์ด #3 (เลือก 2 คำตอบ)
 let pendingStealCardId = null; // ใช้ระหว่างเลือกเป้าหมายของการ์ดขโมย (id 4) ก่อนยืนยัน
 let resolveCardsCalledForIndex = null; // กันไม่ให้ host เรียก resolve-cards ซ้ำสำหรับ target_question_index เดิม
+let cardPickTargetIndex = null; // target_question_index ของรอบเลือกการ์ดปัจจุบัน (ให้ปุ่มข้ามผู้เล่นหลุดเกมใช้อ้างอิงได้)
 
 // ---------- สถานะการ์ด #6 (แช่แข็ง) / #7 (เร่งเวลา) แบบใหม่: ทำงานตอนเวลาเหลือ 5 วิ ----------
 let freezePending = false;      // มีคนถือการ์ดแช่แข็งในรอบนี้ (และไม่ใช่เรา)
@@ -553,6 +554,29 @@ async function hostStartNextQuestionAfterCards() {
   await goToQuestion(room.current_index + 1);
 }
 
+// ---------- ใหม่: host กดข้ามผู้เล่นที่ยังไม่เลือกการ์ด (กันเกมค้างเมื่อมีคนหลุดเกม) ----------
+// ทำงานเหมือนกรณี "เลือกครบทุกคน" ทุกอย่าง (เรียก resolve-cards แล้วไปข้อถัดไป) เพียงแต่ไม่ต้องรอให้ครบจริง
+// คนที่เลือกการ์ดไปแล้วก่อนกดข้าม -> มีแถวใน player_cards อยู่แล้ว resolve-cards จึงยังคำนวณผลการ์ดของคนนั้นให้ตามปกติ
+// คนที่ยังไม่เลือก -> ไม่มีแถวใน player_cards เลย -> resolve-cards จะไม่นับว่าคนนั้นถือการ์ดอะไรทั้งสิ้น (เท่ากับไม่ได้ใช้การ์ดในรอบนี้)
+async function hostSkipCardPick() {
+  if (!isHost || cardPickTargetIndex === null) return;
+  if (!confirm("ข้ามผู้เล่นที่ยังไม่เลือกการ์ด? ผู้เล่นที่ยังไม่เลือกจะไม่ได้ใช้การ์ดในรอบนี้")) return;
+
+  if (resolveCardsCalledForIndex !== cardPickTargetIndex) {
+    resolveCardsCalledForIndex = cardPickTargetIndex;
+    const { error } = await supabaseClient.functions.invoke("resolve-cards", {
+      body: { room_code: roomCode }
+    });
+    if (error) {
+      console.error("resolve-cards (skip) error:", error);
+      resolveCardsCalledForIndex = null;
+      return; // ไม่ต้องไปต่อถ้า resolve ล้มเหลว กันคำนวณคะแนนพลาด
+    }
+  }
+
+  await hostStartNextQuestionAfterCards();
+}
+
 // ============================================================
 // หน้าเลือกการ์ดพลัง
 // ============================================================
@@ -583,6 +607,7 @@ function getOfferedCards(targetQuestionIndex) {
 async function renderCardPickScreen(room, players) {
   showScreen("mp-card-pick-screen");
   const targetIndex = room.current_index + 1;
+  cardPickTargetIndex = targetIndex;
 
   const choicesBox = document.getElementById("mp-card-choices");
   const pickedText = document.getElementById("mp-card-picked-text");
@@ -633,6 +658,11 @@ async function renderCardPickScreen(room, players) {
   const allPicked = players.length > 0 && pickedCount >= players.length;
   document.getElementById("mp-card-all-picked-banner").classList.toggle("hidden", !allPicked);
   document.getElementById("mp-host-next-after-cards-btn").classList.toggle("hidden", !allPicked);
+
+  // ---------- ใหม่: ปุ่มข้ามผู้เล่นที่ยังไม่เลือกการ์ด (เผื่อมีคนหลุดเกม ทำให้รอไม่ครบสักที) ----------
+  // กดได้ตลอดตอนที่ยังเลือกไม่ครบ คนที่เลือกการ์ดไปแล้วยังได้ใช้ความสามารถปกติ
+  // ส่วนคนที่ยังไม่เลือก (ไม่ว่าเพราะหลุดเกมหรือแค่ตัดสินใจช้า) จะถือว่า "ไม่ใช้การ์ด" ไปเลยสำหรับรอบนี้
+  document.getElementById("mp-host-skip-cards-btn").classList.toggle("hidden", allPicked);
 
   // ---------- ปรับใหม่: พอผู้เล่นเลือกการ์ดครบทุกคน -> คำนวณผลขโมย/สะท้อนคะแนนทันทีตรงนี้เลย ----------
   // (เดิมรอจนกด "เริ่มคำถามถัดไป" ทำให้ log/หน้าจอกระพริบไปโผล่ทับช่วงอ่านโจทย์ข้อถัดไปพอดี อ่านไม่ทัน)
@@ -1341,4 +1371,5 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("mp-host-leaderboard-btn")?.addEventListener("click", showLeaderboard);
   document.getElementById("mp-host-next-question-btn")?.addEventListener("click", hostAdvanceFromLeaderboard);
   document.getElementById("mp-host-next-after-cards-btn")?.addEventListener("click", hostStartNextQuestionAfterCards);
+  document.getElementById("mp-host-skip-cards-btn")?.addEventListener("click", hostSkipCardPick);
 });
