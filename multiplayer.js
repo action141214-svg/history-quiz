@@ -3,7 +3,7 @@
 // states: waiting -> question -> reveal -> leaderboard -> card_pick -> (next question) / ended
 // ============================================================
 
-const QUESTION_TIME_LIMIT_MS = 30000; // ปรับจาก 15 วิ เป็น 30 วิ
+const QUESTION_TIME_LIMIT_MS = 20000; // ปรับจาก 30 วิ เหลือ 20 วิ
 const BASE_POINTS = 1000;
 const MIN_POINTS = 300;
 
@@ -73,12 +73,12 @@ async function loadGameList() {
 let myCardThisRound = null;   // card_id ที่เราถืออยู่สำหรับคำถามข้อปัจจุบัน
 let doubleChoiceSelection = []; // สำหรับการ์ด #3 (เลือก 2 คำตอบ)
 let pendingStealCardId = null; // ใช้ระหว่างเลือกเป้าหมายของการ์ดขโมย (id 4) ก่อนยืนยัน
+let resolveCardsCalledForIndex = null; // กันไม่ให้ host เรียก resolve-cards ซ้ำสำหรับ target_question_index เดิม
 
 // ---------- สถานะการ์ด #6 (แช่แข็ง) / #7 (เร่งเวลา) แบบใหม่: ทำงานตอนเวลาเหลือ 5 วิ ----------
 let freezePending = false;      // มีคนถือการ์ดแช่แข็งในรอบนี้ (และไม่ใช่เรา)
 let speedOwnerId = null;        // player_id ของคนถือการ์ดเร่งเวลาในรอบนี้ (null ถ้าไม่มี)
-let fiveSecCheckDone = false;   // เช็คเงื่อนไขตอนเหลือ 5 วิไปแล้วหรือยัง (ทำครั้งเดียวต่อข้อ)
-let twoSecForceCheckDone = false; // เช็คเงื่อนไขบังคับตอบช้าตอนเหลือ 2 วิไปแล้วหรือยัง (ทำครั้งเดียวต่อข้อ)
+let fiveSecCheckDone = false;   // เช็คเงื่อนไขตอนเหลือ 5 วิไปแล้วหรือยัง (ทำครั้งเดียวต่อข้อ — รวมบังคับตอบช้าอัตโนมัติด้วย)
 let speedRushActive = false;    // ตอนนี้เวลากำลังถูกเร่งอยู่ (สำหรับผู้เล่นที่ไม่ใช่เจ้าของการ์ด)
 let rushStartMs = null;         // เวลา (server time) ตอนเริ่มเร่ง ใช้คำนวณเวลาที่เหลือ
 let choicesRevealed = false;    // ผ่านช่วงอ่านโจทย์แล้วหรือยัง (เปิดให้ตอบแล้ว)
@@ -541,16 +541,12 @@ async function hostAdvanceFromLeaderboard() {
   }
 }
 
-// หลังผู้เล่นเลือกการ์ดครบ (หรือ host ยอมข้าม) -> คิดผลการ์ดขโมย/สะท้อนรวมทีเดียว แล้วค่อยเริ่มคำถามข้อถัดไปจริงๆ
+// หลังผู้เล่นเลือกการ์ดครบ (หรือ host ยอมข้าม) -> ไปเริ่มคำถามข้อถัดไปจริงๆ
+// (ไม่ต้องเรียก resolve-cards ตรงนี้แล้ว เพราะย้ายไปเรียกทันทีตอน "ทุกคนเลือกการ์ดครบ" ใน renderCardPickScreen
+//  แทน เพื่อให้แจ้งเตือน/ผลขโมยคะแนนขึ้นตั้งแต่ตอนอยู่หน้าเลือกการ์ด ไม่ไปเด้งทับช่วงอ่านโจทย์ข้อถัดไป)
 async function hostStartNextQuestionAfterCards() {
   const { data: room } = await supabaseClient.from("rooms").select("*").eq("code", roomCode).maybeSingle();
   if (!room) return;
-
-  const { error } = await supabaseClient.functions.invoke("resolve-cards", {
-    body: { room_code: roomCode }
-  });
-  if (error) console.error("resolve-cards error:", error);
-
   await goToQuestion(room.current_index + 1);
 }
 
@@ -634,6 +630,19 @@ async function renderCardPickScreen(room, players) {
   const allPicked = players.length > 0 && pickedCount >= players.length;
   document.getElementById("mp-card-all-picked-banner").classList.toggle("hidden", !allPicked);
   document.getElementById("mp-host-next-after-cards-btn").classList.toggle("hidden", !allPicked);
+
+  // ---------- ปรับใหม่: พอผู้เล่นเลือกการ์ดครบทุกคน -> คำนวณผลขโมย/สะท้อนคะแนนทันทีตรงนี้เลย ----------
+  // (เดิมรอจนกด "เริ่มคำถามถัดไป" ทำให้ log/หน้าจอกระพริบไปโผล่ทับช่วงอ่านโจทย์ข้อถัดไปพอดี อ่านไม่ทัน)
+  if (allPicked && resolveCardsCalledForIndex !== targetIndex) {
+    resolveCardsCalledForIndex = targetIndex; // กันยิงซ้ำจาก re-render
+    const { error } = await supabaseClient.functions.invoke("resolve-cards", {
+      body: { room_code: roomCode }
+    });
+    if (error) {
+      console.error("resolve-cards error:", error);
+      resolveCardsCalledForIndex = null; // ผิดพลาด -> ปล่อยให้ลองใหม่ได้ตอน re-render ครั้งถัดไป
+    }
+  }
 
   const { data: events } = await supabaseClient
     .from("card_events").select("*")
@@ -724,7 +733,6 @@ async function renderQuestionScreen(room) {
     freezePending = false;
     speedOwnerId = null;
     fiveSecCheckDone = false;
-    twoSecForceCheckDone = false;
     speedRushActive = false;
     rushStartMs = null;
     choicesRevealed = false;
@@ -841,32 +849,25 @@ async function renderQuestionScreen(room) {
     timerEl.textContent = Math.ceil(remain / 1000) + " วินาที";
 
     // ---------- เช็คเงื่อนไขตอนเหลือ 5 วิ (ทำครั้งเดียวต่อข้อ) ----------
+    // ปรับใหม่: การ์ดแช่แข็ง/เร่งเวลา บังคับตอบช้าอัตโนมัติทันทีตอนเหลือ 5 วิ (เดิมรอถึง 2 วิ)
     if (remain <= 5000 && remain > 0 && !fiveSecCheckDone) {
       fiveSecCheckDone = true;
       const answeredIds = currentQuestionAnswers.map((a) => a.player_id);
 
-      // การ์ด #6 แช่แข็ง: ถ้าเรายังไม่ตอบและไม่ใช่เจ้าของการ์ด -> แช่แข็งจนหมดเวลา
+      // การ์ด #6 แช่แข็ง: ถ้าเรายังไม่ตอบและไม่ใช่เจ้าของการ์ด -> แช่แข็งจนหมดเวลา + บังคับตอบช้าอัตโนมัติทันที
       if (!isHost && freezePending && !hasAnsweredCurrent && !answeredIds.includes(myPlayerId)) {
         showFrozenOverlay(remain);
+        forceLateAnswer("freeze");
       }
 
-      // การ์ด #7 เร่งเวลา: ถ้าไม่มีใคร (ยกเว้นเจ้าของการ์ด) ตอบเลย -> เร่งเวลาทุกคนยกเว้นเจ้าของทันที
-      if (!isHost && speedOwnerId && myPlayerId !== speedOwnerId) {
+      // การ์ด #7 เร่งเวลา: ถ้าไม่มีใคร (ยกเว้นเจ้าของการ์ด) ตอบเลย -> บังคับตอบช้าอัตโนมัติทันทีสำหรับทุกคนยกเว้นเจ้าของ
+      if (!isHost && speedOwnerId && myPlayerId !== speedOwnerId && !hasAnsweredCurrent) {
         const nonOwnerAnswered = answeredIds.filter((id) => id !== speedOwnerId);
         if (nonOwnerAnswered.length === 0) {
           speedRushActive = true;
           rushStartMs = now;
+          forceLateAnswer("speed");
         }
-      }
-    }
-
-    // ---------- ปรับใหม่: เหลือ 2 วิ ถ้ายังไม่ตอบและกำลังโดนการ์ดแช่แข็ง/เร่งเวลาอยู่ -> บังคับตอบช้าอัตโนมัติ ----------
-    if (remain <= 2000 && remain > 0 && !twoSecForceCheckDone && !isHost && !hasAnsweredCurrent) {
-      const stillFrozen = freezePending; // freezePending จะเป็น true ก็ต่อเมื่อเรายังไม่ตอบและไม่ใช่เจ้าของการ์ด (ดูด้านบน)
-      const stillRushed = speedRushActive && myPlayerId !== speedOwnerId;
-      if (stillFrozen || stillRushed) {
-        twoSecForceCheckDone = true;
-        forceLateAnswer(stillFrozen ? "freeze" : "speed");
       }
     }
 
@@ -877,7 +878,7 @@ async function renderQuestionScreen(room) {
   }, 200);
 }
 
-// ---------- บังคับส่งคำตอบแบบ "ตอบช้า" อัตโนมัติ เมื่อโดนการ์ดแช่แข็ง/เร่งเวลาจนตอบไม่ทัน (เหลือ 2 วิ) ----------
+// ---------- บังคับส่งคำตอบแบบ "ตอบช้า" อัตโนมัติ เมื่อโดนการ์ดแช่แข็ง/เร่งเวลา (ทำงานทันทีตอนเหลือ 5 วิ) ----------
 async function forceLateAnswer(cause) {
   hasAnsweredCurrent = true;
   document.getElementById("mp-choices").classList.add("hidden");
