@@ -83,6 +83,7 @@ let speedRushActive = false;    // ตอนนี้เวลากำลัง
 let rushStartMs = null;         // เวลา (server time) ตอนเริ่มเร่ง ใช้คำนวณเวลาที่เหลือ
 let choicesRevealed = false;    // ผ่านช่วงอ่านโจทย์แล้วหรือยัง (เปิดให้ตอบแล้ว)
 let inkOverlayShownThisRound = false; // การ์ด #10 (หมึก) โชว์ไปแล้วหรือยังในรอบนี้
+let cardEffectsAppliedThisRound = false; // กันไม่ให้ applyCardEffectsToQuestionUI ถูกข้ามไปเฉยๆ (ดูคำอธิบายจุดที่เรียกใช้)
 
 // ---------- ระบบโปรไฟล์ (avatar) ----------
 let myAvatar = null; // avatar URL ปัจจุบันของฉัน (null = ยังไม่ได้เลือก)
@@ -728,6 +729,7 @@ async function renderQuestionScreen(room) {
     rushStartMs = null;
     choicesRevealed = false;
     inkOverlayShownThisRound = false;
+    cardEffectsAppliedThisRound = false;
     currentQuestionAnswers = [];
     document.getElementById("mp-active-card-badge").classList.add("hidden");
     document.getElementById("mp-frozen-overlay").classList.add("hidden");
@@ -799,7 +801,18 @@ async function renderQuestionScreen(room) {
       btn.addEventListener("click", () => submitAnswer(i));
       choicesBox.appendChild(btn);
     });
-    if (isNewQuestion) applyCardEffectsToQuestionUI(room, q, choicesBox);
+    // BUG FIX: เดิมใช้ `isNewQuestion` (closure ของการ render ครั้งนี้) เป็นตัวตัดสินว่าจะเรียก
+    // applyCardEffectsToQuestionUI ไหม แต่ระหว่างช่วง "อ่านโจทย์" ถ้ามี event realtime อื่นเข้ามา
+    // (เช่น player_cards/rooms/players เปลี่ยนแปลง) renderQuestionScreen จะถูกเรียกซ้ำ แล้ว interval เก่า
+    // (ที่มี closure isNewQuestion=true) จะถูก clearInterval ทิ้งไปก่อนจะทันเรียก buildChoicesUI เลย
+    // สุดท้าย interval ล่าสุดที่ได้ทำงานจริงตอนอ่านโจทย์จบ ดันมี closure isNewQuestion=false (เพราะ
+    // _lastIndex ถูกอัปเดตไปแล้วตั้งแต่ render ครั้งแรก) เอฟเฟกต์การ์ดเลย "ไม่ถูกเรียกเลย" ทั้งข้อ —
+    // นี่คือสาเหตุที่การ์ดหมึกไม่ขึ้น และการ์ดเลือก 2 คำตอบกลายเป็นเลือกได้คำตอบเดียว
+    // แก้โดยใช้ flag ที่คงอยู่ข้ามการ render ซ้ำแทน แทนที่จะพึ่ง closure
+    if (!cardEffectsAppliedThisRound) {
+      cardEffectsAppliedThisRound = true;
+      applyCardEffectsToQuestionUI(room, q, choicesBox);
+    }
   }
 
   const questionStartMs = new Date(room.question_start_at).getTime();
